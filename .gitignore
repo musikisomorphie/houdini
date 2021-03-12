@@ -111,6 +111,7 @@ README.html
 MNIST
 # Results/
 Results/*/
+Results/*.npy
 *.pth
 *.mat
 .DS_Store

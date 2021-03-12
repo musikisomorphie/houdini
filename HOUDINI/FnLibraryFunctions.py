@@ -21,7 +21,7 @@ def split(x):
     if type(x) == tuple:
         x = x[1]
 
-    x_list = torch.split(x, split_size=1, dim=1)
+    x_list = torch.split(x, split_size_or_sections=1, dim=1)
     x_list = [torch.squeeze(ii, dim=1) for ii in x_list]
 
     return x_list
@@ -31,7 +31,7 @@ def pp_map2d(fn, iterable):
     if type(iterable) == tuple:
         iterable = iterable[1]
 
-    if isinstance(iterable, torch.autograd.variable.Variable):
+    if isinstance(iterable, torch.autograd.Variable):
         iterable = split(iterable)
         iterable = [split(i) for i in iterable]
 
@@ -44,7 +44,7 @@ def pp_map_g(fn):
         if type(iterable) == tuple:
             iterable = iterable[1]
 
-        if isinstance(iterable, torch.autograd.variable.Variable):
+        if isinstance(iterable, torch.autograd.Variable):
             iterable = split(iterable)
             iterable = [split(i) for i in iterable]
 
@@ -70,7 +70,7 @@ def pp_cat(a, b):
 
 
 def pp_map(fn, iterable):
-    if isinstance(iterable, torch.autograd.variable.Variable):
+    if isinstance(iterable, torch.autograd.Variable):
         iterable = split(iterable)
     if iterable.__len__() > 0 and type(iterable[0]) == tuple:
         iterable = [i[1] for i in iterable]
@@ -80,7 +80,7 @@ def pp_map(fn, iterable):
 
 def pp_map_list(fn):
     def ret(iterable):
-        if isinstance(iterable, torch.autograd.variable.Variable):
+        if isinstance(iterable, torch.autograd.Variable):
             iterable = split(iterable)
         if iterable.__len__() > 0 and type(iterable[0]) == tuple:
             iterable = [i[1] for i in iterable]
@@ -92,7 +92,7 @@ def pp_map_list(fn):
 
 def pp_conv_list(fn):
     def ret(iterable):
-        if isinstance(iterable, torch.autograd.variable.Variable):
+        if isinstance(iterable, torch.autograd.Variable):
             iterable = split(iterable)
         if iterable.__len__() > 0 and type(iterable[0]) == tuple:
             iterable = [i[1] for i in iterable]
@@ -100,7 +100,7 @@ def pp_conv_list(fn):
         if iterable.__len__() == 0:
             return []
 
-        if type(iterable[0]) != torch.autograd.variable.Variable:
+        if type(iterable[0]) != torch.autograd.Variable:
             raise NotHandledException
 
         # zero-pad start and end
@@ -126,7 +126,7 @@ def pp_reduce_graph(fn):
 
 def pp_reduce_list(fn, init=None):
     def ret(iterable):
-        if isinstance(iterable, torch.autograd.variable.Variable):
+        if isinstance(iterable, torch.autograd.Variable):
             iterable = split(iterable)
         if iterable.__len__() > 0 and type(iterable[0]) == tuple:
             iterable = [i[1] for i in iterable]
@@ -149,7 +149,7 @@ def pp_compose(g, f):
 
 
 def pp_reduce(fn, iterable, initializer=None):
-    if isinstance(iterable, torch.autograd.variable.Variable):
+    if isinstance(iterable, torch.autograd.Variable):
         iterable = split(iterable)
     if iterable.__len__() > 0 and type(iterable[0]) == tuple:
         iterable = [i[1] for i in iterable]
@@ -170,7 +170,7 @@ def pp_get_zeros(dim):
     zeros = torch.zeros(1, dim)
     if torch.cuda.is_available():
         zeros = zeros.cuda()
-    return torch.autograd.variable.Variable(zeros)
+    return torch.autograd.Variable(zeros)
 
 
 def get_multiply_by_range09():
@@ -179,7 +179,7 @@ def get_multiply_by_range09():
     range_torch = torch.from_numpy(range_np)
     if torch.cuda.is_available():
         range_torch = range_torch.cuda()
-    range_var = torch.autograd.variable.Variable(range_torch)
+    range_var = torch.autograd.Variable(range_torch)
 
     def pp_multiply_by_range09(inputs):
         return torch.matmul(inputs, range_var)
