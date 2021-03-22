@@ -11,9 +11,9 @@ import numpy as np
 from Data.DataProvider import NumpyDataSetIterator
 from HOUDINI.Interpreter.NeuralModules import *
 from HOUDINI.FnLibrary import FnLibrary
-from HOUDINI.Synthesizer import ReprUtils
+from HOUDINI.Synthesizer.Utils import ReprUtils
 from HOUDINI.Synthesizer.AST import *
-from HOUDINI.Synthesizer.ASTUtils import deconstruct
+from HOUDINI.Synthesizer.Utils.ASTUtils import deconstruct
 
 
 # from HOUDINI.Data.DataProvider_old import *

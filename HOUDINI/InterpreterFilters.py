@@ -1,9 +1,9 @@
 from typing import Tuple
 
 from HOUDINI.Interpreter.NeuralModules import NetMLP
-from HOUDINI.Synthesizer import ASTUtils
+from HOUDINI.Synthesizer.Utils import ASTUtils
 from HOUDINI.Synthesizer.AST import *
-from HOUDINI.Synthesizer.ASTUtils import isArgumentOfFun, deconstruct
+from HOUDINI.Synthesizer.Utils.ASTUtils import deconstruct
 
 
 def get_lib_names(term: PPTerm) -> List[str]:

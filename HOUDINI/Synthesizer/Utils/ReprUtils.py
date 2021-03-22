@@ -1,7 +1,6 @@
 from typing import List, Callable
-
-from HOUDINI.Synthesizer.AST import *
-from HOUDINI.Synthesizer import ASTUtils
+from HOUDINI.Synthesizer import AST
+from HOUDINI.Synthesizer.Utils import ASTUtils
 
 
 def csv(xs: List[str]) -> str:
@@ -9,77 +8,78 @@ def csv(xs: List[str]) -> str:
     return res
 
 
-def repr_py(term: PPTerm) -> str:
+def repr_py(term: AST.PPTerm) -> str:
     assert term is not None
     term_tpe = type(term)
 
     def case(tpe):
         return tpe == term_tpe
 
-    if case(PPIntConst):
+    if case(AST.PPIntConst):
         return str(term.value)
-    elif case(PPRealConst):
+    elif case(AST.PPRealConst):
         return term.value
-    elif case(PPBoolConst):
+    elif case(AST.PPBoolConst):
         return term.value
-    elif case(PPVar):
+    elif case(AST.PPVar):
         return term.name
-    elif case(PPVarDecl):
+    elif case(AST.PPVarDecl):
         return term.name
-    elif case(PPLambda):
+    elif case(AST.PPLambda):
         return 'lambda %s: %s' % (csv(map(repr_py, term.params)), repr_py(term.body))
-    elif case(PPFuncApp):
+    elif case(AST.PPFuncApp):
         # return '%s(%s)' % (term.fname.value, csv(map(repr_py, term.args)))
         fnRepr = repr_py(term.fn)
-        if type(term.fn) != PPVar and type(term.fn) != PPTermUnk:
+        if type(term.fn) != AST.PPVar and type(term.fn) != AST.PPTermUnk:
             fnRepr = '(%s)' % fnRepr
         return '%s(%s)' % (fnRepr, csv(map(repr_py, term.args)))
-    elif case(PPListTerm):
+    elif case(AST.PPListTerm):
         return '[%s]' % csv(map(repr_py, term.items))
-    elif case(PPTermNT):
+    elif case(AST.PPTermNT):
         return term.name
-    elif case(PPTermUnk):
+    elif case(AST.PPTermUnk):
         return term.name
     else:
         raise Exception('Unhandled type in printPython: %s' % type(term))
 
 
-def repr_py_shape(shape: PPDim) -> str:
+def repr_py_shape(shape: AST.PPDim) -> str:
     res = ''
-    if type(shape) == PPDimConst:
+    if type(shape) == AST.PPDimConst:
         res = str(shape.value)
-    elif type(shape) == PPDimVar:
+    elif type(shape) == AST.PPDimVar:
         res = shape.name
     return res
 
 
-def repr_py_sort(sort: PPSort) -> str:
+def repr_py_sort(sort: AST.PPSort) -> str:
     def case(tpe):
         return tpe == type(sort)
 
-    if case(PPInt):
+    if case(AST.PPInt):
         res = 'int'
-    elif case(PPReal):
+    elif case(AST.PPReal):
         res = 'real'
-    elif case(PPBool):
+    elif case(AST.PPBool):
         res = 'bool'
-    elif case(PPListSort):
+    elif case(AST.PPListSort):
         res = 'List[%s]' % (repr_py_sort(sort.param_sort),)
-    elif case(PPGraphSort):
+    elif case(AST.PPGraphSort):
         res = 'GraphSequences[%s]' % (repr_py_sort(sort.param_sort),)
-    elif case(PPTensorSort):
-        res = 'Tensor[%s][%s]' % (repr_py_sort(sort.param_sort), ','.join([repr_py_shape(d) for d in sort.shape]))
-    elif case(PPFuncSort):
+    elif case(AST.PPTensorSort):
+        res = 'Tensor[%s][%s]' % (repr_py_sort(sort.param_sort), ','.join(
+            [repr_py_shape(d) for d in sort.shape]))
+    elif case(AST.PPFuncSort):
         argsRepr = csv(map(repr_py_sort, sort.args))
         argsRepr = '(%s)' % argsRepr if len(sort.args) > 1 else argsRepr
         res = '(%s --> %s)' % (argsRepr, repr_py_sort(sort.rtpe))
-    elif case(PPSortVar):
+    elif case(AST.PPSortVar):
         res = sort.name
-    elif case(PPImageSort):
+    elif case(AST.PPImageSort):
         res = 'Image'
-    elif case(PPEnumSort):
+    elif case(AST.PPEnumSort):
         res = 'EnumSort'
-    elif case(PPDimConst) or case(PPDimVar):
+    elif case(AST.PPDimConst) or case(AST.PPDimVar):
         res = repr_py_shape(sort)
     else:
         raise Exception('Unhandled type: %s' % type(sort))
@@ -87,35 +87,36 @@ def repr_py_sort(sort: PPSort) -> str:
     return res
 
 
-def repr_py_ann(term: PPTerm) -> str:
+def repr_py_ann(term: AST.PPTerm) -> str:
     term_tpe = type(term)
     res = ''
 
     def case(tpe):
         return tpe == term_tpe
 
-    if case(PPIntConst):
+    if case(AST.PPIntConst):
         res = str(term.value)
-    elif case(PPRealConst):
+    elif case(AST.PPRealConst):
         res = str(term.value)
-    elif case(PPBoolConst):
+    elif case(AST.PPBoolConst):
         res = str(term.value)
-    elif case(PPVar):
+    elif case(AST.PPVar):
         res = term.name
-    elif case(PPVarDecl):
+    elif case(AST.PPVarDecl):
         res = '%s: %s' % (term.name, term.sort)
-    elif case(PPLambda):
-        res = 'lambda (%s): %s' % (csv(map(repr_py_ann, term.params)), repr_py_ann(term.body))
-    elif case(PPFuncApp):
+    elif case(AST.PPLambda):
+        res = 'lambda (%s): %s' % (
+            csv(map(repr_py_ann, term.params)), repr_py_ann(term.body))
+    elif case(AST.PPFuncApp):
         fnRepr = repr_py_ann(term.fn)
-        if type(term.fn) != PPVar and type(term.fn) != PPTermUnk:
+        if type(term.fn) != AST.PPVar and type(term.fn) != AST.PPTermUnk:
             fnRepr = '(%s)' % fnRepr
         res = '%s(%s)' % (fnRepr, csv(map(repr_py_ann, term.args)))
-    elif case(PPListTerm):
+    elif case(AST.PPListTerm):
         res = '[%s]' % csv(map(repr_py_ann, term.items))
-    elif case(PPTermNT):
+    elif case(AST.PPTermNT):
         res = '(%s: %s)' % (term.name, repr_py_sort(term.sort))
-    elif case(PPTermUnk):
+    elif case(AST.PPTermUnk):
         res = '(%s: %s)' % (term.name, repr_py_sort(term.sort))
     else:
         raise Exception('Unhandled type: %s' % term_tpe)
@@ -123,46 +124,50 @@ def repr_py_ann(term: PPTerm) -> str:
     return res
 
 
-def expandNthNT(term: PPTerm, ntId: int, expand: Callable[[PPTermNT], PPTerm]) -> PPTerm:
+def expandNthNT(term: AST.PPTerm,
+                ntId: int,
+                expand: Callable[[AST.PPTermNT], AST.PPTerm]) -> AST.PPTerm:
     newTerm = ASTUtils.applyTdOnce(term, ASTUtils.isNthNT(ntId), expand)
     return newTerm
 
 
-def replaceNthNT(term: PPTerm, ntId: int, newSubTerm: PPTerm) -> PPTerm:
-    newTerm = ASTUtils.applyTdOnce(term, ASTUtils.isNthNT(ntId), lambda nt: newSubTerm)
+def replaceNthNT(term: AST.PPTerm,
+                 ntId: int,
+                 newSubTerm: AST.PPTerm) -> AST.PPTerm:
+    newTerm = ASTUtils.applyTdOnce(
+        term, ASTUtils.isNthNT(ntId), lambda nt: newSubTerm)
     return newTerm
 
 
-def simplerep(sort: PPSort):
-    # PPSort = Union[PPInt, PPReal, PPBool, PPSortVar, PPListSort, PPGraphSort, PPTensorSort, PPFuncSort, PPImageSort]
+def simplerep(sort: AST.PPSort):
     def case(tpe):
         return type(sort) == tpe
 
-    if case(PPInt):
+    if case(AST.PPInt):
         return 'int'
-    elif case(PPReal):
+    elif case(AST.PPReal):
         return 'real'
-    elif case(PPBool):
+    elif case(AST.PPBool):
         return 'bool'
-    elif case(PPSortVar):
+    elif case(AST.PPSortVar):
         return sort.name
-    elif case(PPDimVar):
+    elif case(AST.PPDimVar):
         return sort.name
-    elif case(PPDimConst):
+    elif case(AST.PPDimConst):
         return str(sort.value)
-    elif case(PPListSort):
+    elif case(AST.PPListSort):
         return 'List[%s]' % simplerep(sort.param_sort)
-    elif case(PPGraphSort):
+    elif case(AST.PPGraphSort):
         return 'GraphSequences[%s]' % simplerep(sort.param_sort)
-    elif case(PPTensorSort):
+    elif case(AST.PPTensorSort):
         param_sort = simplerep(sort.param_sort)
         shape = ', '.join([simplerep(d) for d in sort.shape])
         return 'Tensor[%s][%s]' % (param_sort, shape)
-    elif case(PPFuncSort):
+    elif case(AST.PPFuncSort):
         args = ' * '.join([simplerep(a) for a in sort.args])
         ret = simplerep(sort.rtpe)
         return '( %s -> %s)' % (args, ret)
-    elif case(PPImageSort):
+    elif case(AST.PPImageSort):
         return 'Image'
-    elif case(PPEnumSort):
+    elif case(AST.PPEnumSort):
         raise NotImplementedError()

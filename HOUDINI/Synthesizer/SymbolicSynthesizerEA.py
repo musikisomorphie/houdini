@@ -5,14 +5,14 @@ from typing import List, Optional, Tuple, Iterable, Dict
 
 from HOUDINI.FnLibraryFunctions import get_items_from_repo
 from HOUDINI.FnLibrary import FnLibrary
-from HOUDINI.Synthesizer import MiscUtils, Rules, ASTUtils
+from HOUDINI.Synthesizer.Utils import MiscUtils, RuleUtils, ASTUtils
 from HOUDINI.Synthesizer.AST import PPTerm, PPTermNT, PPFuncSort, PPTermUnk, PPSort, PPFuncApp, PPDimVar
 from HOUDINI.Synthesizer.ASTDSL import mkFuncSort, mkRealTensorSort, mkBoolTensorSort
-from HOUDINI.Synthesizer.ASTUtils import progTreeSize, inferType, \
+from HOUDINI.Synthesizer.Utils.ASTUtils import progTreeSize, inferType, \
     deconstructProg, constructProg, applyTdProgGeneral, isAbstract, progDepth
-from HOUDINI.Synthesizer.IntermediateTypeHandler import instantiateSortVar
-from HOUDINI.Synthesizer.MiscUtils import logEntryExit
-from HOUDINI.Synthesizer.ReprUtils import repr_py, repr_py_sort, repr_py_ann
+from HOUDINI.Synthesizer.Utils.SubstUtils import substSortVar
+from HOUDINI.Synthesizer.Utils.MiscUtils import logEntryExit
+from HOUDINI.Synthesizer.Utils.ReprUtils import repr_py, repr_py_sort, repr_py_ann
 from HOUDINI.Synthesizer.SymbolicSynthesizer import Action
 
 POPULATION_SIZE = 20
@@ -23,13 +23,13 @@ class ProgramGenerator:
         self.lib = lib
 
     def getActionsFirstNT(self, st: PPTerm) -> List[Action]:
-        return [Action(1, ruleId) for ruleId, rule in enumerate(Rules.rules)]
+        return [Action(1, ruleId) for ruleId, rule in enumerate(RuleUtils.rules)]
 
     def getNextRandomSt(self, state):
         actions = self.getActionsFirstNT(state)
         random.shuffle(actions)
         for action in actions:
-            rule = Rules.getRule(action.ruleId)
+            rule = RuleUtils.getRule(action.ruleId)
             try:
                 nextSts = rule(self.lib, state, action.ntId)
             except SystemError:
@@ -138,7 +138,7 @@ class SymbolicSynthesizerEA:
         for prog in progs:
             if self.concreteTypes:
                 maxSortVarsToBeInstantiated = 2
-                eprogs = instantiateSortVar(prog, self.concreteTypes, maxSortVarsToBeInstantiated)
+                eprogs = substSortVar(prog, self.concreteTypes, maxSortVarsToBeInstantiated)
                 newProgs.extend(eprogs)
             else:
                 newProgs.append(prog)

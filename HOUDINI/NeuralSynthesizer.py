@@ -11,9 +11,9 @@ from HOUDINI.InterpreterFilters import is_evaluable
 from HOUDINI.FnLibraryFunctions import NotHandledException
 from HOUDINI.FnLibrary import FnLibrary, PPLibItem
 from HOUDINI.Synthesizer.AST import *
-from HOUDINI.Synthesizer.ASTUtils import deconstruct
-from HOUDINI.Synthesizer.MiscUtils import getElapsedTime, formatTime
-from HOUDINI.Synthesizer.ReprUtils import repr_py
+from HOUDINI.Synthesizer.Utils.ASTUtils import deconstruct
+from HOUDINI.Synthesizer.Utils.MiscUtils import getElapsedTime, formatTime
+from HOUDINI.Synthesizer.Utils.ReprUtils import repr_py
 from HOUDINI.Synthesizer.SymbolicSynthesizer import SymbolicSynthesizer
 
 """

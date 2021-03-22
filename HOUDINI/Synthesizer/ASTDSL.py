@@ -1,77 +1,44 @@
-from typing import List
-
-from HOUDINI.Synthesizer import MiscUtils
-from HOUDINI.Synthesizer.AST import *
+from typing import List, Union
+from HOUDINI.Synthesizer import AST
 
 
-def mkFnApp(fnTerm: PPTerm, args: List[PPTerm]):
-    return PPFuncApp(fnTerm, args)
+def mkListSort(sort: AST.PPSort) -> AST.PPListSort:
+    return AST.PPListSort(sort)
 
 
-def mkFuncDecl(name, sort: PPFuncSort):
-    return PPFuncDecl(PPSymbol(name), sort)
+def mkGraphSort(sort: AST.PPSort) -> AST.PPGraphSort:
+    return AST.PPGraphSort(sort)
 
 
-def mkListSort(sort: PPSort):
-    return PPListSort(sort)
+def mkUnk(sort: AST.PPSort) -> AST.PPTermUnk:
+    return AST.PPTermUnk('Unk', sort)
 
 
-def mkGraphSort(sort: PPSort):
-    return PPGraphSort(sort)
+def mkFuncSort(*sortlist) -> AST.PPFuncSort:
+    return AST.PPFuncSort(list(sortlist[:-1]), sortlist[-1])
 
 
-freshVarId = MiscUtils.getUniqueFn()
-freshTypeVar = MiscUtils.getUniqueFn()
-
-
-def mkFreshVarDecl(sort: PPSort) -> PPVarDecl:
-    return PPVarDecl('x%s' % freshVarId(), sort)
-
-
-def mkFreshVarDecls(sorts: List[PPSort]) -> List[PPVar]:
-    return map(mkFreshVarDecl, sorts)
-
-
-def mkFreshTypeVar():
-    return PPSortVar('TV%s' % freshTypeVar())
-
-
-def mkUnkFuncVarDecl(sort: PPSort) -> PPVarDecl:
-    return PPVarDecl('unk_fun_%s' % freshVarId(), sort)
-
-
-def mkNT(sort: PPSort):
-    return PPTermNT('Z', sort)
-
-
-def mkUnk(sort: PPSort):
-    return PPTermUnk('Unk', sort)
-
-
-def mkFuncSort(*sortlist):
-    return PPFuncSort(list(sortlist[:-1]), sortlist[-1])
-
-
-def mkTensorSort(sort, rdims):
+def mkTensorSort(sort: AST.PPSort, 
+                 rdims: Union[str, int]) -> AST.PPTensorSort:
     dims = []
     for rdim in rdims:
         if type(rdim) == str:
-            dims.append(PPDimVar(rdim))
+            dims.append(AST.PPDimVar(rdim))
         elif type(rdim) == int:
-            dims.append(PPDimConst(rdim))
+            dims.append(AST.PPDimConst(rdim))
         else:
             raise Exception("Unhandled dimension")
 
-    return PPTensorSort(sort, dims)
+    return AST.PPTensorSort(sort, dims)
 
 
-def mkIntTensorSort(rdims):
-    return mkTensorSort(PPInt(), rdims)
+def mkIntTensorSort(rdims) -> AST.PPTensorSort:
+    return mkTensorSort(AST.PPInt(), rdims)
 
 
-def mkRealTensorSort(rdims):
-    return mkTensorSort(PPReal(), rdims)
+def mkRealTensorSort(rdims) -> AST.PPTensorSort:
+    return mkTensorSort(AST.PPReal(), rdims)
 
 
-def mkBoolTensorSort(rdims):
-    return mkTensorSort(PPBool(), rdims)
+def mkBoolTensorSort(rdims) -> AST.PPTensorSort:
+    return mkTensorSort(AST.PPBool(), rdims)

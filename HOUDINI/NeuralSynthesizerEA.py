@@ -7,8 +7,8 @@ from HOUDINI.InterpreterFilters import is_evaluable
 from HOUDINI.FnLibraryFunctions import NotHandledException
 from HOUDINI.FnLibrary import FnLibrary, PPLibItem
 from HOUDINI.Synthesizer.AST import PPTerm, PPSort, PPFuncSort
-from HOUDINI.Synthesizer.MiscUtils import getElapsedTime, formatTime
-from HOUDINI.Synthesizer.ReprUtils import repr_py
+from HOUDINI.Synthesizer.Utils.MiscUtils import getElapsedTime, formatTime
+from HOUDINI.Synthesizer.Utils.ReprUtils import repr_py
 from HOUDINI.Synthesizer.SymbolicSynthesizerEA import SymbolicSynthesizerEA
 
 NeuralSynthesizerEASettings = NamedTuple("NeuralSynthesizerSettings", [

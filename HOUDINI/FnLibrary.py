@@ -5,7 +5,7 @@ import os.path
 
 from HOUDINI.Synthesizer.AST import *
 from HOUDINI.Synthesizer.AST import PPSort
-from HOUDINI.Synthesizer.GenUtils import createDir
+from HOUDINI.Synthesizer.Utils.MiscUtils import createDir
 
 """
 t = PPSortVar('T')
@@ -14,7 +14,9 @@ t2 = PPSortVar('T2')
 """
 
 
-class PPLibItem(NamedTuple('PPLibItem', [('name', str), ('sort', PPSort), ('obj', object)])):
+class PPLibItem(NamedTuple('PPLibItem', [('name', str),
+                                         ('sort', PPSort),
+                                         ('obj', object)])):
     pass
 
 

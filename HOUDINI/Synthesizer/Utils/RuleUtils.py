@@ -1,15 +1,12 @@
-from typing import Callable, Optional
+from typing import Callable, Optional, List
 
 from HOUDINI import FnLibrary
 from HOUDINI.FnLibrary import PPLibItem
-from HOUDINI.Synthesizer import ASTUtils, ASTDSL, ReprUtils, ScopeUtils
-from HOUDINI.Synthesizer.AST import *
-from HOUDINI.Synthesizer.ASTDSL import mkFuncSort, mkFreshTypeVar
-from HOUDINI.Synthesizer.Unification import unifyOne, applySubst
+from HOUDINI.Synthesizer import AST, ASTDSL
+from HOUDINI.Synthesizer.Utils import ASTUtils, SubstUtils, ReprUtils, ScopeUtils
 
-global gUseTypes
-
-gUseTypes = True
+# global gUseTypes
+# gUseTypes = True
 
 
 def getSortVarNotInTerm(sv, term):
@@ -19,20 +16,20 @@ def getSortVarNotInTerm(sv, term):
     i = 0
     while ASTUtils.exists(term, lambda x: x == sv):
         i = i + 1
-        newsv = PPSortVar(sv.name + '_' + str(i))
+        newsv = AST.PPSortVar(sv.name + '_' + str(i))
         sv = newsv
 
     return sv
 
 
-def mkDimVarNotInTerm(dv, term):
+def getDimVarNotInTerm(dv, term):
     """
     get a dv that is not in term
     """
     i = 0
     while ASTUtils.exists(term, lambda x: x == dv):
         i = i + 1
-        newdv = PPDimVar(dv.name + '_' + str(i))
+        newdv = AST.PPDimVar(dv.name + '_' + str(i))
         dv = newdv
 
     return dv
@@ -52,7 +49,7 @@ def renameDimVars(libItemSort, term):
     i = 0
     dvs = ASTUtils.getDimVars(libItemSort)
     for dv in dvs:
-        newdv = mkDimVarNotInTerm(dv, term)
+        newdv = getDimVarNotInTerm(dv, term)
         libItemSort = ASTUtils.replaceAllSubTerms(libItemSort, dv, newdv)
 
     return libItemSort
@@ -67,7 +64,10 @@ def alphaConvertLibItem(libItem, term):
     return libItem
 
 
-def expandToVar(lib: FnLibrary, term: PPTerm, ntId: int, vname: str) -> Optional[PPTerm]:
+def expandToVar(lib: FnLibrary,
+                term: AST.PPTerm,
+                ntId: int,
+                vname: str) -> Optional[AST.PPTerm]:
     """
     Generate a new term by replacing a "ntId"th NT from a "term" with a variable (in scope) with name "fname"
     """
@@ -77,21 +77,25 @@ def expandToVar(lib: FnLibrary, term: PPTerm, ntId: int, vname: str) -> Optional
     assert libItem
 
     libItem = alphaConvertLibItem(libItem, term)
-    subst = unifyOne(libItem.sort, nt.sort)
+    subst = SubstUtils.unifyOne(libItem.sort, nt.sort)
 
-    if not gUseTypes:
-        if subst is None:
-            subst = []
+    # if not gUseTypes:
+    #     if subst is None:
+    #         subst = []
 
     termExpanded = None
     if subst is not None:
-        termUnified = applySubst(subst, term)
-        termExpanded = ReprUtils.replaceNthNT(termUnified, ntId, PPVar(libItem.name))
+        termUnified = SubstUtils.applySubst(subst, term)
+        termExpanded = ReprUtils.replaceNthNT(
+            termUnified, ntId, AST.PPVar(libItem.name))
 
     return termExpanded
 
 
-def expandToFuncApp(lib: FnLibrary, term: PPTerm, ntId: int, fname: str) -> Optional[PPTerm]:
+def expandToFuncApp(lib: FnLibrary,
+                    term: AST.PPTerm,
+                    ntId: int,
+                    fname: str) -> Optional[AST.PPTerm]:
     resTerm = None
     # Not needed now as there are no lambda terms
     # libItem = ScopeUtils.getAVarInScope(lib, term, ntId, fname)
@@ -101,33 +105,36 @@ def expandToFuncApp(lib: FnLibrary, term: PPTerm, ntId: int, fname: str) -> Opti
 
     libItem = alphaConvertLibItem(libItem, term)
     # TODO: expandToVar passed nt.sort as second argument
-    subst = unifyOne(nt.sort, libItem.sort.rtpe)
+    subst = SubstUtils.unifyOne(nt.sort, libItem.sort.rtpe)
 
-    if not gUseTypes:
-        if subst is None:
-            subst = []
+    # if not gUseTypes:
+    #     if subst is None:
+    #         subst = []
 
     if subst is not None:
-        nts = [PPTermNT('Z', arg_sort) for arg_sort in libItem.sort.args]
-        fnApp = PPFuncApp(PPVar(libItem.name), nts)
+        nts = [AST.PPTermNT('Z', arg_sort) for arg_sort in libItem.sort.args]
+        fnApp = AST.PPFuncApp(AST.PPVar(libItem.name), nts)
 
-        termUnified = applySubst(subst, term)
-        fnAppUnified = applySubst(subst, fnApp)
+        termUnified = SubstUtils.applySubst(subst, term)
+        fnAppUnified = SubstUtils.applySubst(subst, fnApp)
 
         resTerm = ReprUtils.replaceNthNT(termUnified, ntId, fnAppUnified)
 
     return resTerm
 
 
-def expandToUnk(term: PPTerm, ntId: int) -> Optional[PPTerm]:
+def expandToUnk(term: AST.PPTerm,
+                ntId: int) -> Optional[AST.PPTerm]:
     """
-    Generate a new term by replacing a "ntId"th NT from a "term" with a PPTermUnk
+    Generate a new term by replacing a "ntId"th NT from a "term" with a AST.PPTermUnk
     """
     nt = ASTUtils.getNthNT(term, ntId)
 
-    # Avoid generating Unk of type PPDimConst, PPDimVar, PPEumSort, or PPInt()
-    if isinstance(nt.sort, PPDimConst) or isinstance(nt.sort, PPDimVar) or isinstance(nt.sort, PPEnumSort) or \
-            isinstance(nt.sort, PPInt):
+    # Avoid generating Unk of type AST.PPDimConst, AST.PPDimVar, AST.PPEumSort, or AST.PPInt()
+    if isinstance(nt.sort, AST.PPDimConst) or \
+       isinstance(nt.sort, AST.PPDimVar) or \
+       isinstance(nt.sort, AST.PPEnumSort) or \
+       isinstance(nt.sort, AST.PPInt):
         return None
 
     unk = ASTDSL.mkUnk(nt.sort)
@@ -146,59 +153,31 @@ def expandToUnk(term: PPTerm, ntId: int) -> Optional[PPTerm]:
     return termNew
 
 
-def expandDimConst(term: PPTerm, ntId: int) -> Optional[PPTerm]:
+def expandDimConst(term: AST.PPTerm,
+                   ntId: int) -> Optional[AST.PPTerm]:
     """
     Expand dimension constant to integer constants (Required for fold zeros)
     """
     nt = ASTUtils.getNthNT(term, ntId)
-    if type(nt.sort) != PPDimConst:
+    if type(nt.sort) != AST.PPDimConst:
         return None
 
-    subTerm = PPIntConst(nt.sort.value)
+    subTerm = AST.PPIntConst(nt.sort.value)
     termExpanded = ReprUtils.replaceNthNT(term, ntId, subTerm)
     return termExpanded
 
 
-def expandEnum(term: PPTerm, ntId: int, subTerm: PPTerm) -> Optional[PPTerm]:
+def expandEnum(term: AST.PPTerm,
+               ntId: int,
+               subTerm: AST.PPTerm) -> Optional[AST.PPTerm]:
     nt = ASTUtils.getNthNT(term, ntId)
     termExpanded = ReprUtils.replaceNthNT(term, ntId, subTerm)
     return termExpanded
 
 
-# def expandToUnkFuncApp(lib: NewLibrary, term: PPTerm, ntId: int) -> Optional[PPTerm]:
-#     """
-#     Deprecated.
-#     Generate a new term by replacing a "ntId"th NT from a "term" with a (PPTermNT: NewT -> T)(Z: T)
-#     """
-#     # TODO_deprecated: Also generate unkFuncapp of arity 2, 3, ... (Not needed currently)
-#     nt = ASTUtils.getNthNT(term, ntId)
-#     ftv = mkFreshTypeVar()
-#     # TODO_deprecated: generate PPTermNT if you want to increase the search space.
-#     fn = PPTermUnk('Unk', mkFuncSort(ftv, nt.sort))
-#     newSubTerm = PPFuncApp(fn, [PPTermNT('Z', ftv)])
-#     resTerm = ReprUtils.replaceNthNT(term, ntId, newSubTerm)
-#     return resTerm
-
-
-# def expandToLambda(term: PPTerm, ntId: int) -> Optional[PPTerm]:
-#     """
-#     Deprecated.
-#     """
-#     resTerm = None
-#     nt = ASTUtils.getNthNT(term, ntId)
-#
-#     if type(nt.sort) == PPFuncSort:
-#         params = list(map(ASTDSL.mkFreshVarDecl, nt.sort.args))
-#
-#         body = PPTermNT('Z', nt.sort.rtpe)
-#         lambdaTerm = PPLambda(params, body)
-#
-#         resTerm = ReprUtils.replaceNthNT(term, ntId, lambdaTerm)
-#
-#     return resTerm
-
-
-def applyExpandToVar(lib: FnLibrary, term: PPTerm, ntId: int) -> List[PPTerm]:
+def applyExpandToVar(lib: FnLibrary,
+                     term: AST.PPTerm,
+                     ntId: int) -> List[AST.PPTerm]:
     varDecls = ScopeUtils.getAllVarsInScope(lib, term, ntId)
 
     res = []
@@ -210,7 +189,9 @@ def applyExpandToVar(lib: FnLibrary, term: PPTerm, ntId: int) -> List[PPTerm]:
     return res
 
 
-def applyExpandToUnk(lib: FnLibrary, term: PPTerm, ntId: int) -> List[PPTerm]:
+def applyExpandToUnk(lib: FnLibrary,
+                     term: AST.PPTerm,
+                     ntId: int) -> List[AST.PPTerm]:
     # Expand to Unk term
     res = []
     nxtTerm = expandToUnk(term, ntId)
@@ -220,7 +201,9 @@ def applyExpandToUnk(lib: FnLibrary, term: PPTerm, ntId: int) -> List[PPTerm]:
     return res
 
 
-def applyExpandToFuncApp(lib: FnLibrary, term: PPTerm, ntId: int) -> List[PPTerm]:
+def applyExpandToFuncApp(lib: FnLibrary, 
+                         term: AST.PPTerm, 
+                         ntId: int) -> List[AST.PPTerm]:
     varDecls = ScopeUtils.getAllFnVarsInScope(lib, term, ntId)
 
     res = []
@@ -237,23 +220,17 @@ def applyExpandToFuncApp(lib: FnLibrary, term: PPTerm, ntId: int) -> List[PPTerm
     return res
 
 
-# def applyExpandToLambda(lib: NewLibrary, term: PPTerm, ntId: int) -> List[PPTerm]:
-#     nxtTerm = expandToLambda(term, ntId)
-#     if nxtTerm is not None:
-#         return [nxtTerm]
-#     else:
-#         return []
-
-
-def applyExpandEnum(lib: FnLibrary, term: PPTerm, ntId: int) -> List[PPTerm]:
+def applyExpandEnum(lib: FnLibrary, 
+                    term: AST.PPTerm, 
+                    ntId: int) -> List[AST.PPTerm]:
     res = []
 
     nt = ASTUtils.getNthNT(term, ntId)
-    if type(nt.sort) != PPEnumSort:
+    if type(nt.sort) != AST.PPEnumSort:
         return res
 
     for i in range(nt.sort.start, nt.sort.end + 1):
-        subTerm = PPIntConst(i)
+        subTerm = AST.PPIntConst(i)
         nxtTerm = expandEnum(term, ntId, subTerm)
         if nxtTerm is not None:
             res.append(nxtTerm)
@@ -261,7 +238,9 @@ def applyExpandEnum(lib: FnLibrary, term: PPTerm, ntId: int) -> List[PPTerm]:
     return res
 
 
-def applyExpandDimConst(lib: FnLibrary, term: PPTerm, ntId: int) -> List[PPTerm]:
+def applyExpandDimConst(lib: FnLibrary, 
+                        term: AST.PPTerm, 
+                        ntId: int) -> List[AST.PPTerm]:
     res = []
     nxtTerm = expandDimConst(term, ntId)
     if nxtTerm is not None:
@@ -279,5 +258,5 @@ rules = [
 ]
 
 
-def getRule(ruleId: int) -> Callable[[PPTerm, int], List[PPTerm]]:
+def getRule(ruleId: int) -> Callable[[AST.PPTerm, int], List[AST.PPTerm]]:
     return rules[ruleId]

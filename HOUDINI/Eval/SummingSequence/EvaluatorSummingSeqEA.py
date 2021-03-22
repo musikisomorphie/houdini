@@ -4,8 +4,7 @@ from HOUDINI.Eval.Task import TaskSettings
 from HOUDINI.Eval.TaskSeq import TaskSeqSettings
 from HOUDINI.FnLibrary import FnLibrary
 from HOUDINI.FnLibraryFunctions import get_items_from_repo
-from HOUDINI.Synthesizer import GenUtils
-from HOUDINI.Synthesizer.MiscUtils import setup_logging
+from HOUDINI.Synthesizer.MiscUtils import setup_logging, getPythonPath, getPath
 
 
 def main():
@@ -15,9 +14,9 @@ def main():
     debug_mode = False
 
     print("PYTHONPATH: ")
-    print(GenUtils.getPythonPath())
+    print(getPythonPath())
     print("PATH: ")
-    print(GenUtils.getPath())
+    print(getPath())
 
 
     def mkDefaultLib():

@@ -1,19 +1,19 @@
 from typing import Iterable, Tuple, Dict
-
+from queue import PriorityQueue
 import torch.nn.functional as F
 
 from HOUDINI.Synthesizer.ASTDSL import mkRealTensorSort, mkBoolTensorSort
-from HOUDINI.Synthesizer.IntermediateTypeHandler import instantiateSortVar
 from HOUDINI.FnLibrary import FnLibrary
-from HOUDINI.Synthesizer import ASTUtils, Rules, MiscUtils
+from HOUDINI.Synthesizer.Utils import ASTUtils, RuleUtils, MiscUtils
 from HOUDINI.Synthesizer.AST import *
-from HOUDINI.Synthesizer.ReprUtils import repr_py
-from HOUDINI.Synthesizer.SolverPQ import SolverPQ
+from HOUDINI.Synthesizer.Utils.SubstUtils import substSortVar
+from HOUDINI.Synthesizer.Utils.ReprUtils import repr_py
+from HOUDINI.Synthesizer.BaseSynthesizer import BaseSynthesizer
 
 Action = NamedTuple("Action", [('ntId', int), ('ruleId', int)])
 
 
-class SymbolicSynthesizer(SolverPQ[PPTerm, Action]):
+class SymbolicSynthesizer(BaseSynthesizer[PPTerm, Action]):
     def __init__(self, lib: FnLibrary, sort: PPFuncSort, nnprefix='', concreteTypes: List[PPSort] = []):
         self.lib = lib
         self.sort = sort
@@ -39,7 +39,7 @@ class SymbolicSynthesizer(SolverPQ[PPTerm, Action]):
         return True
 
     def getNextStates(self, st: PPTerm, action: Action) -> List[PPTerm]:
-        rule = Rules.getRule(action.ruleId)
+        rule = RuleUtils.getRule(action.ruleId)
         nextSts = rule(self.lib, st, action.ntId)
         nextSts = list(filter(self.filterState, nextSts))
         return nextSts
@@ -49,13 +49,13 @@ class SymbolicSynthesizer(SolverPQ[PPTerm, Action]):
         numNts = ASTUtils.getNumNTs(st)
         actions = []
         for ntId in range(1, numNts + 1):
-            for ruleId in range(Rules.numRules):
+            for ruleId in range(RuleUtils.numRuleUtils):
                 actions.append(Action(ntId, ruleId))
         return actions
 
     def getActionsFirstNT(self, st: PPTerm) -> List[Action]:
         actions = []
-        for ruleId in range(len(Rules.rules)):
+        for ruleId in range(len(RuleUtils.rules)):
             actions.append(Action(1, ruleId))
         return actions
 
@@ -82,6 +82,33 @@ class SymbolicSynthesizer(SolverPQ[PPTerm, Action]):
     def exit(self) -> bool:
         return False
 
+    def genTerms(self) -> Iterable[PPTerm]:
+
+        sn = MiscUtils.getUniqueFn()
+        pq = PriorityQueue()
+
+        def addToPQ(aState):
+            for cAction in self.getActions(aState):
+                stateActionScore = self.getActionCost(aState, cAction)
+                pq.put((stateActionScore, sn(), (aState, cAction)))
+
+        solution, score = None, 0
+
+        state = self.start()
+        addToPQ(state)
+
+        while not pq.empty() and not self.exit():
+            _, _, (state, action) = pq.get()
+
+            self.onEachIteration(state, action)
+
+            states = self.getNextStates(state, action)
+
+            for state in states:
+                if self.isOpen(state):
+                    addToPQ(state)
+                yield state
+
     def genProgs(self) -> Iterable[Tuple[PPTerm, Dict[str, PPSort]]]:
         for prog in self.genTerms():
             if self.isOpen(prog):
@@ -89,7 +116,8 @@ class SymbolicSynthesizer(SolverPQ[PPTerm, Action]):
 
             if self.concreteTypes:
                 maxSortVarsToBeInstantiated = 2
-                eprogs = instantiateSortVar(prog, self.concreteTypes, maxSortVarsToBeInstantiated)
+                eprogs = substSortVar(
+                    prog, self.concreteTypes, maxSortVarsToBeInstantiated)
             else:
                 eprogs = [prog]
 

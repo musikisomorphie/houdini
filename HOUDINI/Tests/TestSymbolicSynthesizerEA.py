@@ -7,7 +7,7 @@ from HOUDINI.Synthesizer.AST import PPFuncApp, PPVar, PPTermUnk, PPFuncSort, PPT
 from HOUDINI.Synthesizer.ASTDSL import mkRealTensorSort, mkBoolTensorSort, mkFuncSort, mkListSort
 from HOUDINI.Synthesizer.ASTUtils import inferType
 from HOUDINI.Synthesizer.ReprUtils import repr_py, repr_py_ann
-from HOUDINI.Synthesizer.Rules import expandToUnk
+from HOUDINI.Synthesizer.Utils.RuleUtils import expandToUnk
 from HOUDINI.Synthesizer.SymbolicSynthesizerEA import mutate, ProgramGenerator, getIdTermSorts, crossover, \
     SymbolicSynthesizerEA
 

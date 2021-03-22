@@ -11,9 +11,8 @@ from HOUDINI.Eval.Task import Task, TaskSettings
 from HOUDINI.Eval.TaskSeq import TaskSeq, TaskSeqSettings
 from HOUDINI.FnLibrary import FnLibrary
 from HOUDINI.FnLibraryFunctions import get_items_from_repo
-from HOUDINI.Synthesizer import GenUtils
-from HOUDINI.Synthesizer.ASTDSL import *
-from HOUDINI.Synthesizer.MiscUtils import setup_logging
+from HOUDINI.Synthesizer.AST import *
+from HOUDINI.Synthesizer.MiscUtils import setup_logging, getPath, getPythonPath
 
 
 class ClassifyDigitsTask(Task):
@@ -94,13 +93,14 @@ def main():
     debug_mode = False
 
     print("PYTHONPATH: ")
-    print(GenUtils.getPythonPath())
+    print(getPythonPath())
     print("PATH: ")
-    print(GenUtils.getPath())
+    print(getPath())
 
     def mkDefaultLib():
         lib = FnLibrary()
-        lib.addItems(get_items_from_repo(['compose', 'repeat', 'map_l', 'fold_l', 'conv_l', 'zeros']))
+        lib.addItems(get_items_from_repo(
+            ['compose', 'repeat', 'map_l', 'fold_l', 'conv_l', 'zeros']))
         return lib
 
     def mkSeq(seq_id_in):
@@ -134,8 +134,10 @@ def main():
                     K=K,
                     epochs=30,
                     synthesizer="enumerative",
-                    filepath_synthesizer_pickle="ss_programs{}.pkl".format(task_id),
-                    filepath_files_to_skip="files_to_skip_ss_t{}.txt".format(task_id + 1),
+                    filepath_synthesizer_pickle="ss_programs{}.pkl".format(
+                        task_id),
+                    filepath_files_to_skip="files_to_skip_ss_t{}.txt".format(
+                        task_id + 1),
                     debug_mode=debug_mode
                 )
             else:
@@ -148,8 +150,10 @@ def main():
                     K=K,
                     epochs=1,
                     synthesizer="enumerative",
-                    filepath_synthesizer_pickle="ss_programs{}.pkl".format(task_id),
-                    filepath_files_to_skip="files_to_skip_ss_t{}.txt".format(task_id + 1),
+                    filepath_synthesizer_pickle="ss_programs{}.pkl".format(
+                        task_id),
+                    filepath_files_to_skip="files_to_skip_ss_t{}.txt".format(
+                        task_id + 1),
                     debug_mode=debug_mode
                 )
 

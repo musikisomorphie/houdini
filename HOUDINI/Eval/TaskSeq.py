@@ -7,9 +7,9 @@ from HOUDINI.Eval.EvaluatorUtils import mk_tag, write_to_file, append_to_file
 from HOUDINI.Eval.Task import Task, TaskResult, TaskResultSingle
 from HOUDINI.FnLibraryFunctions import loadLibrary1
 from HOUDINI.FnLibrary import FnLibrary, PPLibItem
-from HOUDINI.Synthesizer import ASTUtils
+from HOUDINI.Synthesizer.Utils import ASTUtils
 from HOUDINI.Synthesizer.AST import PPSort
-from HOUDINI.Synthesizer.GenUtils import createDir
+from HOUDINI.Synthesizer.Utils.MiscUtils import createDir
 
 # from HOUDINI.Eval.EvaluatorTaskSeq import TaskSeqSettings
 

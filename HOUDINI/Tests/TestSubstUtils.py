@@ -1,6 +1,6 @@
 from HOUDINI.Synthesizer.AST import *
 from HOUDINI.Synthesizer.ASTDSL import mkTensorSort
-from HOUDINI.Synthesizer.Unification import unifyLists, applySubst
+from HOUDINI.Synthesizer.SubstUtils import unifyLists, applySubst
 
 
 def test0():

@@ -1,39 +1,39 @@
+from HOUDINI.Synthesizer.SymbolicSynthesizer import SymbolicSynthesizer
+from HOUDINI.Synthesizer.AST import PPSort, PPTerm
+from HOUDINI.Synthesizer.SymbolicSynthesizerEA import SymbolicSynthesizerEA
+from HOUDINI.NeuralSynthesizerEA import NeuralSynthesizerEA, NeuralSynthesizerEASettings, \
+    NeuralSynthesizerEAResult
+from HOUDINI.NeuralSynthesizer import NeuralSynthesizerSettings, NeuralSynthesizer, NeuralSynthesizerResult, \
+    NSDebugInfo
+from HOUDINI.Interpreter.Interpreter import Interpreter
+from HOUDINI.Eval.EvaluatorUtils import iterate_diff_training_sizes, mk_tag, mk_div
+import os
+import numpy as np
+from typing import NamedTuple, List, Tuple, Dict
+# added for debugging purposes
+from HOUDINI.Synthesizer.Utils.ReprUtils import repr_py
+import matplotlib.pyplot as plt
 import matplotlib
 import time
 
-from HOUDINI.Synthesizer.MiscUtils import getElapsedTime, formatTime
+from HOUDINI.Synthesizer.Utils.MiscUtils import getElapsedTime, formatTime
 from HOUDINI.Synthesizer.ASTDSL import mkRealTensorSort, mkBoolTensorSort
 
 matplotlib.use('agg')
-import matplotlib.pyplot as plt
-from HOUDINI.Synthesizer.ReprUtils import repr_py  # added for debugging purposes
-
-from typing import NamedTuple, List, Tuple, Dict
-
-import numpy as np
-import os
-from HOUDINI.Eval.EvaluatorUtils import iterate_diff_training_sizes, mk_tag, mk_div
-from HOUDINI.Interpreter.Interpreter import Interpreter
-from HOUDINI.NeuralSynthesizer import NeuralSynthesizerSettings, NeuralSynthesizer, NeuralSynthesizerResult, \
-    NSDebugInfo
-from HOUDINI.NeuralSynthesizerEA import NeuralSynthesizerEA, NeuralSynthesizerEASettings, \
-    NeuralSynthesizerEAResult
-from HOUDINI.Synthesizer.SymbolicSynthesizerEA import SymbolicSynthesizerEA
-
-from HOUDINI.Synthesizer.AST import PPSort, PPTerm
-from HOUDINI.Synthesizer.ReprUtils import repr_py
-from HOUDINI.Synthesizer.SymbolicSynthesizer import SymbolicSynthesizer
 
 
 class TaskResultSingle:
     """
     Task Result for a single datasize
     """
+
     def __init__(self):
-        self.top_k_solutions_results: List[Tuple[PPTerm, Dict]] = []  # top k solution-score pairs. descending order
+        # top k solution-score pairs. descending order
+        self.top_k_solutions_results: List[Tuple[PPTerm, Dict]] = []
         self.num_programs: int = None  # Total number of programs evaluated
         self.time: int = None  # time taken in seconds
-        self.progScores: List[List[Tuple[str, float]]] = None  # genid --> progid --> (progstr, score)
+        # genid --> progid --> (progstr, score)
+        self.progScores: List[List[Tuple[str, float]]] = None
         # Only for evolutionary synthesizer. List of programs for various generations.
 
     def get_top_solution_details(self) -> Tuple[PPTerm, Dict]:
@@ -54,14 +54,16 @@ class TaskResultSingle:
             return None
 
     def gen_report(self, task) -> str:
-        header_row = mk_tag('tr', mk_tag('th', 'Score Test / Val') + mk_tag('th', 'Top %d Programs' % task.settings.K))
+        header_row = mk_tag('tr', mk_tag(
+            'th', 'Score Test / Val') + mk_tag('th', 'Top %d Programs' % task.settings.K))
 
         def mk_row(p, s_test, s_val):
-            return mk_tag('tr', mk_tag('td',"%.4f / %.4f" % (s_test, s_val)) + mk_tag('td', repr_py(p)))
+            return mk_tag('tr', mk_tag('td', "%.4f / %.4f" % (s_test, s_val)) + mk_tag('td', repr_py(p)))
 
         rows = []
         for p, rdict in self.top_k_solutions_results:
-            test_acc = rdict['test_accuracy'] if 'test_accuracy' in rdict else -10000.
+            test_acc = rdict['test_accuracy'] if 'test_accuracy' in rdict else - \
+                10000.
             val_acc = rdict['accuracy'] if 'accuracy' in rdict else -10000.
             rows.append(mk_row(p, test_acc, val_acc))
         # rows = [mk_row(p, rdict['test_accuracy'], rdict['accuracy']) for p, rdict in self.top_k_solutions_results]
@@ -75,7 +77,8 @@ class TaskResultSingle:
 
             for i, iprogs in enumerate(self.progScores):
                 c = mk_div('Generation: %d' % i)
-                c += ''.join(mk_div('%.2f ' % score + pstr, cls=['Prog']) for (pstr, score) in iprogs)
+                c += ''.join(mk_div('%.2f ' % score + pstr,
+                                    cls=['Prog']) for (pstr, score) in iprogs)
                 genReprs.append(mk_div(c, cls=['Generation']))
 
             return ''.join(genReprs)
@@ -88,7 +91,8 @@ class TaskResultSingle:
 
     def get_raw_data(self):
         res = dict()
-        res['top_k_solutions_results'] = [(str(prog), res)for (prog, res) in self.top_k_solutions_results]
+        res['top_k_solutions_results'] = [(str(prog), res)for (
+            prog, res) in self.top_k_solutions_results]
         res['num_programs'] = self.num_programs
         res['time'] = self.time
         res['progScores'] = self.progScores
@@ -97,11 +101,13 @@ class TaskResultSingle:
 
 class TaskResult:
     def __init__(self):
-        self.results: List[TaskResultSingle] = []  # Result for various data sizes.
+        # Result for various data sizes.
+        self.results: List[TaskResultSingle] = []
 
     def save_plot(self, task, seq_dir):
         xs = np.array(task.settings.training_percentages)
-        ys = np.array([single_result.get_top_score() for single_result in self.results])
+        ys = np.array([single_result.get_top_score()
+                       for single_result in self.results])
 
         plt.figure()
         plt.xlabel("Training Dataset Size")
@@ -133,7 +139,8 @@ class TaskResult:
         for task_result_single, percentage in zip(self.results, task.settings.training_percentages):
             res += '<br>'
             res += mk_div('Training Data Used: %s %%' % percentage)
-            res += mk_div('Number of programs evaluated: %s' % task_result_single.num_programs)
+            res += mk_div('Number of programs evaluated: %s' %
+                          task_result_single.num_programs)
             res += task_result_single.gen_report(task)
         return res
 
@@ -144,7 +151,8 @@ class TaskResult:
 _TaskSettings = NamedTuple('TaskSettings', [
     ('train_size', int),  # Training data size
     ('val_size', int),  # Validation data size = Test data size
-    ('training_percentages', List[int]),  # Train on different training data sizes.
+    # Train on different training data sizes.
+    ('training_percentages', List[int]),
     ('N', int),  # Max number of solutions to generate
     ('M', int),  # Max number of solutions evaluated by the interpreter
     ('K', int),  # Number of top solutions to store.
@@ -180,27 +188,36 @@ class Task:
 
     def _mkNSynth(self):
         ea_synthesis_mode = self.settings.synthesizer == 'evolutionary'
-        interpreter = Interpreter(self.seq.lib, epochs=self.settings.epochs, batch_size=self.settings.batch_size)
+        interpreter = Interpreter(
+            self.seq.lib, epochs=self.settings.epochs, batch_size=self.settings.batch_size)
         nnprefix = self.seq.sname() + self.sname()
 
         if self.settings.synthesizer == 'enumerative':
             # concrete_types = [mkRealTensorSort([1, 64, 4, 4]), mkRealTensorSort([1, 50])]
-            concreteTypes = [mkRealTensorSort([1, 64, 4, 4]), mkBoolTensorSort([1, 1]), mkRealTensorSort([1, 50])]
-            synth = SymbolicSynthesizer(self.seq.lib, self.fn_sort, nnprefix, concreteTypes)
+            concreteTypes = [mkRealTensorSort([1, 64, 4, 4]), mkBoolTensorSort([
+                1, 1]), mkRealTensorSort([1, 50])]
+            synth = SymbolicSynthesizer(
+                self.seq.lib, self.fn_sort, nnprefix, concreteTypes)
 
-            ns_settings = NeuralSynthesizerSettings(self.settings.N, self.settings.M, self.settings.K)
+            ns_settings = NeuralSynthesizerSettings(
+                self.settings.N, self.settings.M, self.settings.K)
             assert self.seq.lib is not None
-            nsynth = NeuralSynthesizer(interpreter, synth, self.seq.lib, self.fn_sort, self.settings.dbg_learn_parameters, ns_settings)
+            nsynth = NeuralSynthesizer(interpreter, synth, self.seq.lib,
+                                       self.fn_sort, self.settings.dbg_learn_parameters, ns_settings)
             return nsynth
         elif self.settings.synthesizer == 'evolutionary':
-            concreteTypes = [mkRealTensorSort([1, 64, 4, 4]), mkBoolTensorSort([1, 1]), mkRealTensorSort([1, 50])]
-            synth = SymbolicSynthesizerEA(self.seq.lib, self.fn_sort, nnprefix, concreteTypes)
+            concreteTypes = [mkRealTensorSort([1, 64, 4, 4]), mkBoolTensorSort([
+                1, 1]), mkRealTensorSort([1, 50])]
+            synth = SymbolicSynthesizerEA(
+                self.seq.lib, self.fn_sort, nnprefix, concreteTypes)
 
             # TODO: Do not hardcode G
             NUM_GENERATIIONS = 100
-            ns_settings = NeuralSynthesizerEASettings(G=NUM_GENERATIIONS, M=self.settings.M, K=self.settings.K)
+            ns_settings = NeuralSynthesizerEASettings(
+                G=NUM_GENERATIIONS, M=self.settings.M, K=self.settings.K)
             assert self.seq.lib is not None
-            nsynth = NeuralSynthesizerEA(interpreter, synth, self.seq.lib, self.fn_sort, ns_settings)
+            nsynth = NeuralSynthesizerEA(
+                interpreter, synth, self.seq.lib, self.fn_sort, ns_settings)
             return nsynth
 
     def run(self) -> TaskResult:
@@ -208,7 +225,8 @@ class Task:
         print("BEGIN_TASK, Time: %s" % getElapsedTime())
         nsynth = self._mkNSynth()
 
-        print("Num of programs selected for evaluation: %d" % len(nsynth.prog_unkinfo_tuples))
+        print("Num of programs selected for evaluation: %d" %
+              len(nsynth.prog_unkinfo_tuples))
         print("Programs selected for evaluation:")
         for c_prog, c_unkSortMap in nsynth.prog_unkinfo_tuples:
             print(repr_py(c_prog))
@@ -222,10 +240,12 @@ class Task:
 
         res = TaskResult()
         for i, (c_tr_io_examples, c_tr_num_items) in enumerate(iterate_diff_training_sizes(train_io,
-                                                                              self.settings.training_percentages)):
+                                                                                           self.settings.training_percentages)):
             interpreter = nsynth.interpreter
-            c_iterations_per_epoch = c_tr_num_items // interpreter.batch_size + (1 if c_tr_num_items % interpreter.batch_size != 0 else 0)
-            c_num_epochs = max_iterations // c_iterations_per_epoch + (1 if max_iterations % c_iterations_per_epoch != 0 else 0)
+            c_iterations_per_epoch = c_tr_num_items // interpreter.batch_size + \
+                (1 if c_tr_num_items % interpreter.batch_size != 0 else 0)
+            c_num_epochs = max_iterations // c_iterations_per_epoch + \
+                (1 if max_iterations % c_iterations_per_epoch != 0 else 0)
             # interpreter.epochs = c_num_epochs
 
             rStart = time.time()
@@ -233,7 +253,8 @@ class Task:
             c_res = TaskResultSingle()
 
             try:
-                nsynth_res: NeuralSynthesizerResult = nsynth.solve(c_tr_io_examples, val_io, test_io)
+                nsynth_res: NeuralSynthesizerResult = nsynth.solve(
+                    c_tr_io_examples, val_io, test_io)
 
                 c_res.top_k_solutions_results = nsynth_res.top_k_solutions_results
                 c_res.num_programs = len(nsynth.prog_unkinfo_tuples)
@@ -269,6 +290,7 @@ class Task:
         print("TIME_TAKEN_TASK, %s" % formatTime(tEnd - tStart))
 
         if hasattr(nsynth, "target_program_position"):
-            print("Program found at place : {}".format(nsynth.target_program_position))
+            print("Program found at place : {}".format(
+                nsynth.target_program_position))
 
         return res

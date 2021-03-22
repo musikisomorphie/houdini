@@ -2,13 +2,11 @@ import inspect
 import logging
 import logging.config
 import os
-
+import yaml
 import time
-
 import datetime
 from functools import wraps
-
-import yaml
+from pathlib import Path
 
 
 def getUniqueFn():
@@ -85,3 +83,30 @@ def logEntryExit(name):
 
         return impl
     return logEntryExitName
+
+
+def createDir(save_dir):
+    p = Path(save_dir)
+    if not p.is_dir():
+        p.mkdir(parents=True, exist_ok=False)
+    # try:
+    #     os.makedirs(path)
+    # except OSError as e:
+    #     if e.errno != errno.EEXIST:
+    #         raise
+
+
+def getPythonPath():
+    try:
+        user_paths = os.environ['PYTHONPATH'].split(os.pathsep)
+    except KeyError:
+        user_paths = []
+    return user_paths
+
+
+def getPath():
+    try:
+        user_paths = os.environ['PATH'].split(os.pathsep)
+    except KeyError:
+        user_paths = []
+    return user_paths

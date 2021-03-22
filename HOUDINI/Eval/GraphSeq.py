@@ -7,7 +7,7 @@ from HOUDINI.Eval.Task import Task, TaskSettings
 from HOUDINI.Eval.TaskSeq import TaskSeq, TaskSeqSettings
 from HOUDINI.FnLibraryFunctions import get_items_from_repo
 from HOUDINI.FnLibrary import FnLibrary
-from HOUDINI.Synthesizer.ASTDSL import *
+from HOUDINI.Synthesizer.AST import *
 from HOUDINI.Synthesizer.MiscUtils import setup_logging
 
 

@@ -1,0 +1,4 @@
+{
+    "python.linting.enabled": true,
+    "python.pythonPath": "/home/miashan/miniconda3/envs/research/bin/python"
+}
