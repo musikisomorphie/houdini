@@ -1,6 +1,6 @@
 from typing import Optional, List, Dict
-from HOUDINI.FnLibrary import PPLibItem
-from HOUDINI.Synthesizer import AST 
+from HOUDINI.Library.FnLibrary import PPLibItem
+from HOUDINI.Synthesizer import AST
 from HOUDINI.Synthesizer.Utils import ASTUtils
 
 

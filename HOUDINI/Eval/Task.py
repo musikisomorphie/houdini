@@ -17,7 +17,7 @@ import matplotlib
 import time
 
 from HOUDINI.Synthesizer.Utils.MiscUtils import getElapsedTime, formatTime
-from HOUDINI.Synthesizer.ASTDSL import mkRealTensorSort, mkBoolTensorSort
+from HOUDINI.Synthesizer.AST import mkRealTensorSort, mkBoolTensorSort
 
 matplotlib.use('agg')
 

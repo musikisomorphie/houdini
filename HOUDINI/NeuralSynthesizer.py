@@ -7,9 +7,9 @@ import numpy as np
 
 # from HOUDINI.Data.DataProvider_old import split_into_train_and_validation, get_batch_count_iseven
 from HOUDINI.Interpreter.Interpreter import Interpreter
-from HOUDINI.InterpreterFilters import is_evaluable
-from HOUDINI.FnLibraryFunctions import NotHandledException
-from HOUDINI.FnLibrary import FnLibrary, PPLibItem
+from HOUDINI.Interpreter.Utils.EvalUtils import is_evaluable
+from HOUDINI.Library.Op import NotHandledException
+from HOUDINI.Library.FnLibrary import FnLibrary, PPLibItem
 from HOUDINI.Synthesizer.AST import *
 from HOUDINI.Synthesizer.Utils.ASTUtils import deconstruct
 from HOUDINI.Synthesizer.Utils.MiscUtils import getElapsedTime, formatTime
@@ -33,7 +33,8 @@ class NSDebugInfo:
 
 
 def _debug_info(prog: PPTerm, unkSortMap, lib: FnLibrary, fnSort: PPSort):
-    lib_items = [PPLibItem(li.name, li.sort, None) for (_, li) in lib.items.items()]
+    lib_items = [PPLibItem(li.name, li.sort, None)
+                 for (_, li) in lib.items.items()]
     dprog = """
     io_examples_tr, io_examples_val = None, None
     prog = %s
@@ -62,23 +63,9 @@ class NeuralSynthesizerResult:
         """
         Top scoring program and corresponding score
         """
-        top_solution_score = self.top_k_solution_scores[0] if len(self.top_k_solution_scores) else None
+        top_solution_score = self.top_k_solution_scores[0] if len(
+            self.top_k_solution_scores) else None
         return top_solution_score
-
-
-def get_lib_names(term: PPTerm) -> List[str]:
-    if isinstance(term, PPVar):
-        name = term.name
-        if name[:4] == "lib.":
-            return [name[4:]]
-        else:
-            return []
-    else:
-        nts = []
-        for c in deconstruct(term):
-            cnts = get_lib_names(c)
-            nts.extend(cnts)
-        return nts
 
 
 class NeuralSynthesizer:
@@ -123,7 +110,8 @@ class NeuralSynthesizer:
                 continue
 
             if is_ok:
-                self.evaluated_programs_str.append(c_program_str_representation)
+                self.evaluated_programs_str.append(
+                    c_program_str_representation)
                 self.evaluated_programs_type_info.append(str(prog))
                 self.prog_unkinfo_tuples.append((prog, unkSortMap))
                 m += 1
@@ -153,7 +141,8 @@ class NeuralSynthesizer:
         return res
 
     def update_top_k(self, top_k_solutions_results: List[Tuple[PPTerm, Dict]]):
-        top_k_solutions_results.sort(key=lambda x: x[1]['accuracy'], reverse=True)
+        top_k_solutions_results.sort(
+            key=lambda x: x[1]['accuracy'], reverse=True)
         if len(top_k_solutions_results) > self.settings.K:
             del top_k_solutions_results[-1]
 
@@ -165,7 +154,8 @@ class NeuralSynthesizer:
 
         for prog, unkSortMap in self.prog_unkinfo_tuples:
             try:
-                interpreter_res = self.interpret(prog, unkSortMap, io_examples_tr, io_examples_val, io_examples_test)
+                interpreter_res = self.interpret(
+                    prog, unkSortMap, io_examples_tr, io_examples_val, io_examples_test)
             except NotHandledException as e:
                 self.log_unhandled_program(prog)
                 continue
@@ -207,11 +197,10 @@ class NeuralSynthesizer:
     def log_evaluator_exception(self, e, prog, unkSortMap):
         loggerE = logging.getLogger('pp.exceptions')
         loggerE.error('Exception in the Interpreter.\n %s' % repr(e))
-        loggerE.error('DebugInfo.\n %s' % _debug_info(prog, unkSortMap, self.lib, self.sort)[0].dprog)
+        loggerE.error('DebugInfo.\n %s' % _debug_info(
+            prog, unkSortMap, self.lib, self.sort)[0].dprog)
 
     def log_isevaluable_exception(self, e, prog, unkSortMap):
         loggerE = logging.getLogger('pp.exceptions')
         e.args += _debug_info(prog, unkSortMap, self.lib, self.sort)
         loggerE.error('#### Exception in the Interpreter.\n %s' % repr(e))
-
-

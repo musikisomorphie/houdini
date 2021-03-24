@@ -2,8 +2,8 @@
 from HOUDINI.Eval.SummingSequence.EvaluatorSummingSeq import SummingSeqOne, SummingSeqTwo
 from HOUDINI.Eval.Task import TaskSettings
 from HOUDINI.Eval.TaskSeq import TaskSeqSettings
-from HOUDINI.FnLibrary import FnLibrary
-from HOUDINI.FnLibraryFunctions import get_items_from_repo
+from HOUDINI.Library.FnLibrary import FnLibrary
+from HOUDINI.Library.OpLibrary import OpLibrary
 from HOUDINI.Synthesizer.MiscUtils import setup_logging, getPythonPath, getPath
 
 
@@ -18,10 +18,9 @@ def main():
     print("PATH: ")
     print(getPath())
 
-
     def mkDefaultLib():
-        lib = FnLibrary()
-        lib.addItems(get_items_from_repo(['compose', 'repeat', 'map_l', 'fold_l', 'conv_l', 'zeros']))
+        lib = OpLibrary(['compose', 'repeat', 'map_l', 
+                         'fold_l', 'conv_l', 'zeros'])
         return lib
 
     def mkSeq(seq_id_in):
@@ -73,6 +72,7 @@ def main():
             seq = mkSeq(seq_id)
             seq.run(task_id)
             # seq.write_report(task_id)
+
 
 if __name__ == '__main__':
     setup_logging()

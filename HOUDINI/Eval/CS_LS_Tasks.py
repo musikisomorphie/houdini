@@ -1,7 +1,7 @@
 from HOUDINI.Eval.EvaluatorUtils import get_io_examples_recognize_digit, \
     get_io_examples_count_digit_occ, get_io_examples_count_toys, get_io_examples_recognize_toy
 from HOUDINI.Eval.Task import Task
-from HOUDINI.Synthesizer.ASTDSL import mkFuncSort, mkRealTensorSort, mkListSort, mkBoolTensorSort
+from HOUDINI.Synthesizer.AST import mkFuncSort, mkRealTensorSort, mkListSort, mkBoolTensorSort
 
 
 class RecognizeDigitTask(Task):

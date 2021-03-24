@@ -124,18 +124,12 @@ def repr_py_ann(term: AST.PPTerm) -> str:
     return res
 
 
-def expandNthNT(term: AST.PPTerm,
-                ntId: int,
-                expand: Callable[[AST.PPTermNT], AST.PPTerm]) -> AST.PPTerm:
-    newTerm = ASTUtils.applyTdOnce(term, ASTUtils.isNthNT(ntId), expand)
-    return newTerm
-
-
 def replaceNthNT(term: AST.PPTerm,
                  ntId: int,
                  newSubTerm: AST.PPTerm) -> AST.PPTerm:
-    newTerm = ASTUtils.applyTdOnce(
-        term, ASTUtils.isNthNT(ntId), lambda nt: newSubTerm)
+    newTerm = ASTUtils.applyTdOnce(term,
+                                   ASTUtils.isNthNT(ntId),
+                                   lambda nt: newSubTerm)
     return newTerm
 
 

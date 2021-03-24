@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from HOUDINI.Interpreter.Interpreter import Interpreter, ProgramOutputType
-from HOUDINI.FnLibrary import PPLibItem
+from HOUDINI.Library.FnLibrary import PPLibItem
 from Data import DataProvider
 import os
 
@@ -35,9 +35,11 @@ def display_graph_a(label_to_tuple_of_numpy_map, xlabel="Training Dataset Size",
             for y_idx in range(y_axis_entries.shape[1]):
                 if y_axis_entries[idx][y_idx] is not None:
                     if negate_y:
-                        y_axis_entries[idx][y_idx] = y_axis_entries[idx][y_idx] * (-1)
+                        y_axis_entries[idx][y_idx] = y_axis_entries[idx][y_idx] * \
+                            (-1)
                     if one_minus_y:
-                        y_axis_entries[idx][y_idx] = 1 - y_axis_entries[idx][y_idx]
+                        y_axis_entries[idx][y_idx] = 1 - \
+                            y_axis_entries[idx][y_idx]
                     not_none_values.append(y_axis_entries[idx][y_idx])
             if not_none_values.__len__() > 0:
                 new_x_axis.append(x_axis_entries[idx])
@@ -50,7 +52,8 @@ def display_graph_a(label_to_tuple_of_numpy_map, xlabel="Training Dataset Size",
 
         plt.fill_between(new_x_axis, tpm_means - tpm_std,
                          tpm_means + tpm_std, alpha=0.1)  # , color=colors[i])
-        t_line, = plt.plot(new_x_axis, tpm_means, 'o-', label=label, markersize=1, )
+        t_line, = plt.plot(new_x_axis, tpm_means, 'o-',
+                           label=label, markersize=1, )
 
         handles.append(t_line)
     plt.legend(handles=handles)
@@ -68,7 +71,7 @@ def display_graph_a(label_to_tuple_of_numpy_map, xlabel="Training Dataset Size",
 def load_and_display_graph_a(dict_of_label_to_filename_list, results_directory="Eval/Results",
                              xlabel="Training Dataset Size", ylabel="Accuracy after training",
                              negate_y=False, one_minus_y=False, savefilename=None):
-    label_to_tuple_of_numpy_map = {} # {"label": (numpy_x, numpy_y)}
+    label_to_tuple_of_numpy_map = {}  # {"label": (numpy_x, numpy_y)}
     for label, filename_list in dict_of_label_to_filename_list.items():
 
         list_x = None
@@ -81,7 +84,8 @@ def load_and_display_graph_a(dict_of_label_to_filename_list, results_directory="
             list_x = list_x if list_x is not None else nparray[0]
 
             c_list_y = nparray[1].reshape(-1, 1)
-            list_y = c_list_y if list_y is None else np.hstack((list_y, c_list_y))
+            list_y = c_list_y if list_y is None else np.hstack(
+                (list_y, c_list_y))
 
         label_to_tuple_of_numpy_map[label] = (list_x, list_y)
 
@@ -92,15 +96,18 @@ def load_and_display_graph_a(dict_of_label_to_filename_list, results_directory="
 
 def iterate_diff_training_sizes(train_io_examples, training_data_percentages):
     # assuming all lengths are represented equally
-    num_of_training_dp = train_io_examples[0][0].shape[0] if type(train_io_examples) == list else train_io_examples[0].shape[0]
+    num_of_training_dp = train_io_examples[0][0].shape[0] if type(
+        train_io_examples) == list else train_io_examples[0].shape[0]
 
     for percentage in training_data_percentages:
         c_num_items = (percentage*num_of_training_dp) // 100
         if type(train_io_examples) == list:
-            c_tr_io_examples = [(t[0][:c_num_items], t[1][:c_num_items]) for t in train_io_examples]
+            c_tr_io_examples = [(t[0][:c_num_items], t[1][:c_num_items])
+                                for t in train_io_examples]
             return_c_num_items = c_num_items * train_io_examples.__len__()
         else:
-            c_tr_io_examples = (train_io_examples[0][:c_num_items], train_io_examples[1][:c_num_items])
+            c_tr_io_examples = (
+                train_io_examples[0][:c_num_items], train_io_examples[1][:c_num_items])
             return_c_num_items = c_num_items
 
         yield c_tr_io_examples, return_c_num_items, percentage == 100
@@ -132,7 +139,8 @@ def get_graph_a(interpreter, data_size_train, training_data_percentages, io_exam
 
     if filename_to_save_the_plot_in is not None and results_directory is not None:
         nparray = np.array([list_num_examples, list_accuracies])
-        np.save("{}/{}.npy".format(results_directory, filename_to_save_the_plot_in), nparray)
+        np.save("{}/{}.npy".format(results_directory,
+                                   filename_to_save_the_plot_in), nparray)
 
     """
     plt.plot(list_num_examples, list_accuracies)
@@ -140,4 +148,3 @@ def get_graph_a(interpreter, data_size_train, training_data_percentages, io_exam
     plt.xlabel('# Training Examples')
     plt.show(block=True)
     """
-

@@ -2,7 +2,7 @@
 
 from HOUDINI.Eval.EvaluatorUtils import get_io_examples_classify_digits
 from HOUDINI.Interpreter.Interpreter import Interpreter
-from HOUDINI.FnLibrary import FnLibrary, PPLibItem
+from HOUDINI.Library.FnLibrary import FnLibrary, PPLibItem
 from HOUDINI.Synthesizer.AST import *
 
 
@@ -12,8 +12,10 @@ def main():
     # Task Name: classify_digits
     prog = PPTermUnk(name='nn_fun_cs1cd_1', sort=PPFuncSort(args=[PPTensorSort(param_sort=PPReal(),
                                                                                shape=[PPDimConst(value=1),
-                                                                                      PPDimConst(value=1),
-                                                                                      PPDimConst(value=28),
+                                                                                      PPDimConst(
+                                                                                          value=1),
+                                                                                      PPDimConst(
+                                                                                          value=28),
                                                                                       PPDimConst(value=28)])],
                                                             rtpe=PPTensorSort(param_sort=PPBool(),
                                                                               shape=[PPDimConst(value=1),
@@ -47,22 +49,23 @@ def main():
                                                                                                              rtpe=PPSortVar(
                                                                                                                  name='A'))),
                                                                                                      obj=None),
-                  PPLibItem(name='map_l',
-                            sort=PPFuncSort(args=[PPFuncSort(args=[PPSortVar(name='A')], rtpe=PPSortVar(name='B'))],
-                                            rtpe=PPFuncSort(args=[PPListSort(param_sort=PPSortVar(name='A'))],
-                                                            rtpe=PPListSort(param_sort=PPSortVar(name='B')))),
-                            obj=None), PPLibItem(name='fold_l', sort=PPFuncSort(
-            args=[PPFuncSort(args=[PPSortVar(name='B'), PPSortVar(name='A')], rtpe=PPSortVar(name='B')),
-                  PPSortVar(name='B')],
-            rtpe=PPFuncSort(args=[PPListSort(param_sort=PPSortVar(name='A'))], rtpe=PPSortVar(name='B'))), obj=None),
-                  PPLibItem(name='conv_l', sort=PPFuncSort(
-                      args=[PPFuncSort(args=[PPListSort(param_sort=PPSortVar(name='A'))], rtpe=PPSortVar(name='B'))],
-                      rtpe=PPFuncSort(args=[PPListSort(param_sort=PPSortVar(name='A'))],
-                                      rtpe=PPListSort(param_sort=PPSortVar(name='B')))), obj=None),
-                  PPLibItem(name='zeros', sort=PPFuncSort(args=[PPDimVar(name='a')],
-                                                          rtpe=PPTensorSort(param_sort=PPReal(),
-                                                                            shape=[PPDimConst(value=1),
-                                                                                   PPDimVar(name='a')])), obj=None)])
+        PPLibItem(name='map_l',
+                  sort=PPFuncSort(args=[PPFuncSort(args=[PPSortVar(name='A')], rtpe=PPSortVar(name='B'))],
+                                  rtpe=PPFuncSort(args=[PPListSort(param_sort=PPSortVar(name='A'))],
+                                                  rtpe=PPListSort(param_sort=PPSortVar(name='B')))),
+                  obj=None), PPLibItem(name='fold_l', sort=PPFuncSort(
+                      args=[PPFuncSort(args=[PPSortVar(name='B'), PPSortVar(name='A')], rtpe=PPSortVar(name='B')),
+                            PPSortVar(name='B')],
+                      rtpe=PPFuncSort(args=[PPListSort(param_sort=PPSortVar(name='A'))], rtpe=PPSortVar(name='B'))), obj=None),
+        PPLibItem(name='conv_l', sort=PPFuncSort(
+            args=[PPFuncSort(
+                args=[PPListSort(param_sort=PPSortVar(name='A'))], rtpe=PPSortVar(name='B'))],
+            rtpe=PPFuncSort(args=[PPListSort(param_sort=PPSortVar(name='A'))],
+                            rtpe=PPListSort(param_sort=PPSortVar(name='B')))), obj=None),
+        PPLibItem(name='zeros', sort=PPFuncSort(args=[PPDimVar(name='a')],
+                                                rtpe=PPTensorSort(param_sort=PPReal(),
+                                                                  shape=[PPDimConst(value=1),
+                                                                         PPDimVar(name='a')])), obj=None)])
     fn_sort = PPFuncSort(args=[PPTensorSort(param_sort=PPReal(),
                                             shape=[PPDimConst(value=1), PPDimConst(value=1), PPDimConst(value=28),
                                                    PPDimConst(value=28)])],

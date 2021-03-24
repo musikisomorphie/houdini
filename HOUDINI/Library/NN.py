@@ -18,7 +18,8 @@ class SaveableNNModule(nn.Module):
         pass
 
     def load(self, filename):
-        self.load_state_dict(torch.load(filename, map_location=lambda storage, loc: storage))
+        self.load_state_dict(torch.load(
+            filename, map_location=lambda storage, loc: storage))
 
     def save(self, directory):
         if directory[-1] == '/':
@@ -33,7 +34,7 @@ class SaveableNNModule(nn.Module):
         if self.params_dict is not None:
             if "output_activation" not in self.params_dict or self.params_dict["output_activation"] is None:
                 self.params_dict["output_activation"] = "None"
-            elif self.params_dict["output_activation"] == F.sigmoid:
+            elif self.params_dict["output_activation"] == torch.sigmoid:
                 self.params_dict["output_activation"] = "sigmoid"
             elif type(self.params_dict["output_activation"]) == nn.Softmax:
                 self.params_dict["output_activation"] = "softmax"
@@ -57,7 +58,7 @@ class SaveableNNModule(nn.Module):
             if params_dict["output_activation"] == "None":
                 params_dict["output_activation"] = None
             elif params_dict["output_activation"] == "sigmoid":
-                params_dict["output_activation"] = F.sigmoid
+                params_dict["output_activation"] = torch.sigmoid
             elif params_dict["output_activation"] == "softmax":
                 params_dict["output_activation"] = nn.Softmax(dim=1)
             else:
@@ -74,7 +75,7 @@ class SaveableNNModule(nn.Module):
 class NetCNN(SaveableNNModule):
     def __init__(self, name, input_dim, input_ch):
         """
-        :param output_activation: [None, F.softmax, F.sigmoid]
+        :param output_activation: [None, F.softmax, torch.sigmoid]
         """
         super(NetCNN, self).__init__()
 
@@ -83,12 +84,17 @@ class NetCNN(SaveableNNModule):
         self.layer_sizes = [32, 64]
 
         self.conv1 = nn.Conv2d(input_ch, self.layer_sizes[0], kernel_size=5)
-        conv1_output_dim = self.cnn_get_output_dim(input_dim, 5, stride=1, padding=0)
-        pool1_output_dim = self.cnn_get_output_dim(conv1_output_dim, 2, stride=2, padding=0)
+        conv1_output_dim = self.cnn_get_output_dim(
+            input_dim, 5, stride=1, padding=0)
+        pool1_output_dim = self.cnn_get_output_dim(
+            conv1_output_dim, 2, stride=2, padding=0)
 
-        self.conv2 = nn.Conv2d(self.layer_sizes[0], self.layer_sizes[1], kernel_size=5)
-        conv2_output_dim = self.cnn_get_output_dim(pool1_output_dim, kernel_size=5, stride=1, padding=0)
-        self.pool2_output_dim = self.cnn_get_output_dim(conv2_output_dim, 2, stride=2, padding=0)
+        self.conv2 = nn.Conv2d(
+            self.layer_sizes[0], self.layer_sizes[1], kernel_size=5)
+        conv2_output_dim = self.cnn_get_output_dim(
+            pool1_output_dim, kernel_size=5, stride=1, padding=0)
+        self.pool2_output_dim = self.cnn_get_output_dim(
+            conv2_output_dim, 2, stride=2, padding=0)
 
         self.conv2_drop = nn.Dropout2d()
         """
@@ -115,12 +121,12 @@ class NetMLP(SaveableNNModule):
     def __init__(self, name, input_dim, output_dim, output_activation=None, hidden_layer=True):
         """
         :param
-        :param output_activation: [None, F.softmax, F.sigmoid]
+        :param output_activation: [None, F.softmax, torch.sigmoid]
         """
         super(NetMLP, self).__init__()
         self.output_dim = output_dim
         self.name = name
-        self.output_activation=output_activation
+        self.output_activation = output_activation
         self.hidden_layer = hidden_layer
         # fc1_size = 300
         if self.hidden_layer:
@@ -136,7 +142,7 @@ class NetMLP(SaveableNNModule):
 
     def forward(self, x, x1=None):
         if type(x) == tuple:
-                x = x[1]
+            x = x[1]
         if list(x.shape).__len__() == 4:  # if it's 2d, flatten to 1d
             x = x.view(x.shape[0], -1)
 
@@ -152,13 +158,15 @@ class NetMLP(SaveableNNModule):
             if dim0_x == 1 and dim0 > 1:
                 dim1_x = x.shape[1]
                 new = torch.ones((dim0, dim1_x))
-                new = Variable(new).cuda() if torch.cuda.is_available() else Variable(new)
+                new = Variable(new).cuda(
+                ) if torch.cuda.is_available() else Variable(new)
                 x = new*x
 
             if dim0_x1 == 1 and dim0 > 1:
                 dim1_x1 = x1.shape[1]
                 new = torch.ones((dim0, dim1_x1))
-                new = Variable(new).cuda() if torch.cuda.is_available() else Variable(new)
+                new = Variable(new).cuda(
+                ) if torch.cuda.is_available() else Variable(new)
                 x1 = new * x1
 
             # x1.shape[0] == 1
@@ -174,7 +182,8 @@ class NetMLP(SaveableNNModule):
         # FC Layer 2
         if self.output_dim is not None:
             x_logits = self.fc2(x)
-            output = x_logits if self.output_activation is None else self.output_activation(x_logits)
+            output = x_logits if self.output_activation is None else self.output_activation(
+                x_logits)
             return x_logits, output
         else:
             return x
@@ -191,7 +200,7 @@ class NetRNN(SaveableNNModule):
 
         #self.lstm = nn.LSTM(embedding_dim, hidden_dim)
         self.lstm = nn.LSTM(input_size=input_dim, hidden_size=self.hidden_dim)
-        self.hidden = None # a placeholder, used for the hidden state of the lstm
+        self.hidden = None  # a placeholder, used for the hidden state of the lstm
         self.output_dim = output_dim
         self.output_activation = output_activation
         self.output_sequence = output_sequence
@@ -211,7 +220,8 @@ class NetRNN(SaveableNNModule):
 
         var1 = Variable(t1)
         var2 = Variable(t2)
-        self.hidden = (var1.cuda(), var2.cuda()) if torch.cuda.is_available() else (var1, var2)
+        self.hidden = (var1.cuda(), var2.cuda()
+                       ) if torch.cuda.is_available() else (var1, var2)
 
     def forward(self, x):
         # if necessarry, concatenate from list to tensor
@@ -231,8 +241,8 @@ class NetRNN(SaveableNNModule):
         # apply rnn list_size number of times
         # lstm_output: [seq_len, batch, hidden_size * num_directions]
         # lstm_output: [seq_len, batch_size, hidden_size]
-        #print(x)
-        #print(self.hidden)
+        # print(x)
+        # print(self.hidden)
         lstm_out, self.hidden = self.lstm(x, self.hidden)
 
         last_hidden_state = lstm_out[-1]
@@ -246,7 +256,7 @@ class NetRNN(SaveableNNModule):
         if not self.output_sequence:
             return self.mlp(last_hidden_state)
 
-        #at this point, we need to output a sequence, so we use the mlp to process the all sequences
+        # at this point, we need to output a sequence, so we use the mlp to process the all sequences
         seq_len = lstm_out.shape[0]
         grid_size = int(math.sqrt(seq_len))
         batch_size = lstm_out.shape[1]
@@ -254,7 +264,8 @@ class NetRNN(SaveableNNModule):
         outputs = lstm_out.view(seq_len*batch_size, self.hidden_dim)
         outputs = self.mlp(outputs)
         if type(outputs) == tuple:
-            outputs = outputs[1]  # might want to keep the tuples, so they can be processed as well. not now.
+            # might want to keep the tuples, so they can be processed as well. not now.
+            outputs = outputs[1]
         outputs = outputs.view(seq_len, batch_size)
         outputs = outputs.transpose(0, 1)   # batch_size, length_size
         outputs = outputs.contiguous().view(batch_size, grid_size, grid_size)
@@ -264,7 +275,7 @@ class NetRNN(SaveableNNModule):
 class NetGRAPHNew(SaveableNNModule):
     def __init__(self, name, output_activation=None, input_ch=2, num_output_channels=100):
         """
-        :param output_activation: [None, F.softmax, F.sigmoid]
+        :param output_activation: [None, F.softmax, torch.sigmoid]
         """
         super(NetGRAPHNew, self).__init__()
 
@@ -273,15 +284,23 @@ class NetGRAPHNew(SaveableNNModule):
 
         noch = num_output_channels
 
-        self.conv1 = nn.Conv2d(in_channels=input_ch, out_channels=noch, kernel_size=3, padding=1)
-        self.nullify_3d_corners(self.conv1.weight.data)  # set the corner weights to 0
-        self.conv1.weight.register_hook(self.nullify_3d_corners)  # do the same for every gradient
+        self.conv1 = nn.Conv2d(in_channels=input_ch,
+                               out_channels=noch, kernel_size=3, padding=1)
+        # set the corner weights to 0
+        self.nullify_3d_corners(self.conv1.weight.data)
+        # do the same for every gradient
+        self.conv1.weight.register_hook(self.nullify_3d_corners)
 
-        self.conv2 = nn.Conv2d(in_channels=noch, out_channels=noch, kernel_size=1, padding=0)
-        self.conv3 = nn.Conv2d(in_channels=noch, out_channels=noch, kernel_size=1, padding=0)
-        self.conv4 = nn.Conv2d(in_channels=noch, out_channels=noch, kernel_size=1, padding=0)
-        self.conv5 = nn.Conv2d(in_channels=noch, out_channels=noch, kernel_size=1, padding=0)
-        self.conv6 = nn.Conv2d(in_channels=noch, out_channels=1, kernel_size=1, padding=0)
+        self.conv2 = nn.Conv2d(
+            in_channels=noch, out_channels=noch, kernel_size=1, padding=0)
+        self.conv3 = nn.Conv2d(
+            in_channels=noch, out_channels=noch, kernel_size=1, padding=0)
+        self.conv4 = nn.Conv2d(
+            in_channels=noch, out_channels=noch, kernel_size=1, padding=0)
+        self.conv5 = nn.Conv2d(
+            in_channels=noch, out_channels=noch, kernel_size=1, padding=0)
+        self.conv6 = nn.Conv2d(
+            in_channels=noch, out_channels=1, kernel_size=1, padding=0)
 
     def forward(self, graph):
         # if x is a 2d list, convert it to a variable
@@ -293,11 +312,11 @@ class NetGRAPHNew(SaveableNNModule):
                 graph = [[j[1] for j in i] for i in graph]
 
             if graph.__len__() > 0 and type(graph[0]) == list:
-                #concatenate all along cols
+                # concatenate all along cols
                 graph = [[torch.unsqueeze(j, dim=2) for j in i] for i in graph]
                 graph = [torch.cat(i, dim=2) for i in graph]
 
-                #concatenate along rows
+                # concatenate along rows
                 graph = [torch.unsqueeze(a, dim=2) for a in graph]
                 graph = torch.cat(graph, dim=2)
         elif type(graph) == tuple:
@@ -342,7 +361,8 @@ def get_nn_from_params_dict(uf):
                         output_dim=output_dim, output_activation=output_activation,
                         output_sequence=output_sequence)
     elif uf["type"] == "GCONVNew":
-        new_nn = NetGRAPHNew(uf["name"], None, uf["input_dim"], num_output_channels=100)
+        new_nn = NetGRAPHNew(
+            uf["name"], None, uf["input_dim"], num_output_channels=100)
     else:
         raise NotImplementedError()
 

@@ -1,7 +1,7 @@
-from HOUDINI.FnLibraryFunctions import get_items_from_repo
-from HOUDINI.FnLibrary import FnLibrary, PPLibItem
+from HOUDINI.Library.OpLibrary import OpLibrary
+from HOUDINI.Library.FnLibrary import FnLibrary, PPLibItem
 from HOUDINI.Synthesizer import ASTUtils
-from HOUDINI.Synthesizer.ASTDSL import *
+from HOUDINI.Synthesizer.AST import *
 from HOUDINI.Synthesizer.ASTUtils import isAbstract, inferType, alphaConvertSorts
 from HOUDINI.Synthesizer.ReprUtils import repr_py_sort
 
@@ -43,8 +43,8 @@ def testConcrete():
 
 
 def mkDefaultLib():
-    lib = FnLibrary()
-    lib.addItems(get_items_from_repo(['compose', 'repeat', 'map_l', 'fold_l', 'conv_l', 'zeros']))
+    lib = OpLibrary(['compose', 'repeat', 'map_l', 
+                     'fold_l', 'conv_l', 'zeros'])
     return lib
 
 
@@ -101,7 +101,8 @@ def testInfer1():
 def testInfer2():
     lib = mkDefaultLib()
 
-    sort = mkFuncSort(mkRealTensorSort([1, 1]), mkBoolTensorSort([1, 1]), mkRealTensorSort([1, 1]))
+    sort = mkFuncSort(mkRealTensorSort([1, 1]), mkBoolTensorSort(
+        [1, 1]), mkRealTensorSort([1, 1]))
 
     prog = PPTermUnk(name='nn_fun_x_906',
                      sort=PPFuncSort(
@@ -156,7 +157,8 @@ def testInfer4():
     outType = mkListSort(mkBoolTensorSort([1, 1]))
     sort = mkFuncSort(inType, outType)
 
-    prog = PPFuncApp(fn=PPVar(name='lib.map_l'), args=[PPVar(name='lib.recogFive')])
+    prog = PPFuncApp(fn=PPVar(name='lib.map_l'), args=[
+                     PPVar(name='lib.recogFive')])
 
     sortInferred = inferType(prog, lib)
 
@@ -264,8 +266,6 @@ def testInfer8():
     # assert sortInferred is None
 
 
-
-
 def testInfer9():
     lib = mkDefaultLib()
 
@@ -276,31 +276,31 @@ def testInfer9():
         mkListSort(mkBoolTensorSort([1, 1])))
 
     prog = PPFuncApp(fn=PPVar(name='lib.map_l'),
-              args=[
-                  PPFuncApp(
-                      fn=PPVar(name='lib.compose'),
-                      args=[PPTermUnk(name='Unk',
-                                      sort=PPFuncSort(args=[PPSortVar(name='C')],
-                                                      rtpe=PPTensorSort(
-                                                          param_sort=PPBool(),
-                                                          shape=[PPDimConst(value=1),
-                                                                 PPDimConst(
-                                                                     value=1)]))),
-                            PPFuncApp(fn=PPVar(
-                                name='lib.compose'),
-                                args=[PPTermUnk(
-                                    name='Unk',
-                                    sort=PPFuncSort(
-                                        args=[
-                                            PPTensorSort(
-                                                param_sort=PPBool(),
-                                                shape=[
-                                                    PPDimConst(
-                                                        value=1),
-                                                    PPDimConst(
-                                                        value=1)])],
-                                        rtpe=PPSortVar(name='C'))),
-                                    PPVar(name='lib.recogFive')])])])
+                     args=[
+        PPFuncApp(
+            fn=PPVar(name='lib.compose'),
+            args=[PPTermUnk(name='Unk',
+                            sort=PPFuncSort(args=[PPSortVar(name='C')],
+                                            rtpe=PPTensorSort(
+                                param_sort=PPBool(),
+                                shape=[PPDimConst(value=1),
+                                       PPDimConst(
+                                    value=1)]))),
+                  PPFuncApp(fn=PPVar(
+                      name='lib.compose'),
+                args=[PPTermUnk(
+                    name='Unk',
+                    sort=PPFuncSort(
+                        args=[
+                            PPTensorSort(
+                                param_sort=PPBool(),
+                                shape=[
+                                    PPDimConst(
+                                        value=1),
+                                    PPDimConst(
+                                        value=1)])],
+                        rtpe=PPSortVar(name='C'))),
+                      PPVar(name='lib.recogFive')])])])
 
     sortInferred = inferType(prog, lib)
     assert sort == sortInferred
@@ -314,7 +314,6 @@ def testInfer10():
     sort = mkFuncSort(
         mkListSort(mkRealTensorSort([1, 1, 28, 28])),
         mkListSort(mkBoolTensorSort([1, 1])))
-
 
     prog = PPFuncApp(
         fn=PPVar(
@@ -343,8 +342,10 @@ def testInfer10():
                                             args=[PPListSort(
                                                 param_sort=PPTensorSort(param_sort=PPReal(),
                                                                         shape=[PPDimConst(value=1),
-                                                                               PPDimConst(value=1),
-                                                                               PPDimConst(value=28),
+                                                                               PPDimConst(
+                                                                                   value=1),
+                                                                               PPDimConst(
+                                                                                   value=28),
                                                                                PPDimConst(value=28)]))],
                                             rtpe=PPFuncSort(args=[PPSortVar(name='A')],
                                                             rtpe=PPSortVar(name='B_1_2'))))])])
@@ -361,7 +362,6 @@ def testInfer11():
         mkListSort(mkRealTensorSort([1, 1, 28, 28])),
         mkListSort(mkBoolTensorSort([1, 1])))
 
-
     prog = PPFuncApp(
         fn=PPVar(
             name='lib.compose'),
@@ -389,8 +389,10 @@ def testInfer11():
                                             args=[PPListSort(
                                                 param_sort=PPTensorSort(param_sort=PPReal(),
                                                                         shape=[PPDimConst(value=1),
-                                                                               PPDimConst(value=1),
-                                                                               PPDimConst(value=28),
+                                                                               PPDimConst(
+                                                                                   value=1),
+                                                                               PPDimConst(
+                                                                                   value=28),
                                                                                PPDimConst(value=28)]))],
                                             rtpe=PPFuncSort(args=[PPSortVar(name='A')],
                                                             rtpe=PPSortVar(name='B_1_2'))))])])
@@ -456,27 +458,27 @@ def testAlphaConvertSorts():
     assert newSortsToRename[2] == mkFuncSort(PPSortVar('C0'), PPSortVar('A0'))
 
 
-
 def testInfer12():
     # infeType fails on these programs
     lib = None
     # lib.compose(lib.compose(lib.compose(Unk, lib.compose(Unk, lib.compose(lib.map_l, lib.map_l))), Unk),
     # lib.map_l(lib.recogFive))
     prog1 = PPFuncApp(fn=PPVar(name='lib.compose'),
-                     args=[
-                         PPFuncApp(fn=PPVar(name='lib.compose'),args=[
-                             PPFuncApp(fn=PPVar(name='lib.compose'),args=[
-                                 PPTermUnk(name='Unk',
-                                           sort=PPFuncSort(args=[PPSortVar(name='C')], rtpe=PPTensorSort(param_sort=PPReal(), shape=[PPDimConst(value=1), PPDimConst(value=1)]))),
-                                 PPFuncApp(fn=PPVar(name='lib.compose'), args=[
-                                     PPTermUnk(name='Unk', sort=PPFuncSort(args=[PPFuncSort(args=[PPListSort(param_sort=PPListSort(param_sort=PPSortVar(name='A_1_2')))], rtpe=PPListSort(param_sort=PPListSort(param_sort=PPSortVar(name='B_1'))))], rtpe=PPSortVar(name='C'))),
-                                     PPFuncApp(fn=PPVar(name='lib.compose'), args=[
-                                         PPVar(name='lib.map_l'),
-                                         PPVar(name='lib.map_l')])])]),
-                             PPTermUnk(name='Unk', sort=PPFuncSort(args=[PPListSort(param_sort=PPTensorSort(
-                                 param_sort=PPBool(), shape=[PPDimConst(value=1), PPDimConst(value=1)]))], rtpe=PPFuncSort(args=[PPSortVar(name='A_1_2')], rtpe=PPSortVar(name='B_1'))))]),
-                         PPFuncApp(fn=PPVar(name='lib.map_l'), args=[
-                             PPVar(name='lib.recogFive')])])
+                      args=[
+        PPFuncApp(fn=PPVar(name='lib.compose'), args=[
+            PPFuncApp(fn=PPVar(name='lib.compose'), args=[
+                PPTermUnk(name='Unk',
+                          sort=PPFuncSort(args=[PPSortVar(name='C')], rtpe=PPTensorSort(param_sort=PPReal(), shape=[PPDimConst(value=1), PPDimConst(value=1)]))),
+                PPFuncApp(fn=PPVar(name='lib.compose'), args=[
+                    PPTermUnk(name='Unk', sort=PPFuncSort(args=[PPFuncSort(args=[PPListSort(param_sort=PPListSort(param_sort=PPSortVar(
+                        name='A_1_2')))], rtpe=PPListSort(param_sort=PPListSort(param_sort=PPSortVar(name='B_1'))))], rtpe=PPSortVar(name='C'))),
+                    PPFuncApp(fn=PPVar(name='lib.compose'), args=[
+                        PPVar(name='lib.map_l'),
+                        PPVar(name='lib.map_l')])])]),
+            PPTermUnk(name='Unk', sort=PPFuncSort(args=[PPListSort(param_sort=PPTensorSort(
+                param_sort=PPBool(), shape=[PPDimConst(value=1), PPDimConst(value=1)]))], rtpe=PPFuncSort(args=[PPSortVar(name='A_1_2')], rtpe=PPSortVar(name='B_1'))))]),
+        PPFuncApp(fn=PPVar(name='lib.map_l'), args=[
+            PPVar(name='lib.recogFive')])])
 
     # lib.compose(Unk, lib.compose(lib.compose(lib.compose(lib.map_l, lib.map_l), lib.map_l), Unk))
     prog2 = PPFuncApp(fn=PPVar(name='lib.compose'), args=[PPTermUnk(name='Unk', sort=PPFuncSort(args=[PPFuncSort(args=[
@@ -497,23 +499,24 @@ def testInfer12_1():
     # lib.compose(lib.compose(lib.compose(Unk, lib.compose(Unk, lib.compose(lib.map_l, lib.map_l))), Unk),
     # lib.map_l(lib.recogFive))
     prog1 = PPFuncApp(fn=PPVar(name='lib.compose'),
-                     args=[
-                         PPFuncApp(fn=PPVar(name='lib.compose'),args=[
-                             PPFuncApp(fn=PPVar(name='lib.compose'),args=[
-                                 PPTermUnk(name='Unk',
-                                           sort=PPFuncSort(args=[PPSortVar(name='C')], rtpe=PPTensorSort(param_sort=PPReal(), shape=[PPDimConst(value=1), PPDimConst(value=1)]))),
-                                 PPFuncApp(fn=PPVar(name='lib.compose'), args=[
-                                     PPTermUnk(name='Unk', sort=PPFuncSort(args=[PPFuncSort(args=[PPListSort(param_sort=PPListSort(param_sort=PPSortVar(name='A_1_2')))], rtpe=PPListSort(param_sort=PPListSort(param_sort=PPSortVar(name='B_1'))))], rtpe=PPSortVar(name='C'))),
-                                     PPFuncApp(fn=PPVar(name='lib.compose'), args=[
-                                         PPVar(name='lib.map_l'),
-                                         PPVar(name='lib.map_l')])])]),
-                             PPTermUnk(name='Unk', sort=PPFuncSort(args=[PPListSort(param_sort=PPTensorSort(
-                                 param_sort=PPBool(), shape=[PPDimConst(value=1), PPDimConst(value=1)]))], rtpe=PPFuncSort(args=[PPSortVar(name='A_1_2')], rtpe=PPSortVar(name='B_1'))))]),
-                         PPFuncApp(fn=PPVar(name='lib.map_l'), args=[
-                             PPVar(name='lib.recogFive')])])
+                      args=[
+        PPFuncApp(fn=PPVar(name='lib.compose'), args=[
+            PPFuncApp(fn=PPVar(name='lib.compose'), args=[
+                PPTermUnk(name='Unk',
+                          sort=PPFuncSort(args=[PPSortVar(name='C')], rtpe=PPTensorSort(param_sort=PPReal(), shape=[PPDimConst(value=1), PPDimConst(value=1)]))),
+                PPFuncApp(fn=PPVar(name='lib.compose'), args=[
+                    PPTermUnk(name='Unk', sort=PPFuncSort(args=[PPFuncSort(args=[PPListSort(param_sort=PPListSort(param_sort=PPSortVar(
+                        name='A_1_2')))], rtpe=PPListSort(param_sort=PPListSort(param_sort=PPSortVar(name='B_1'))))], rtpe=PPSortVar(name='C'))),
+                    PPFuncApp(fn=PPVar(name='lib.compose'), args=[
+                        PPVar(name='lib.map_l'),
+                        PPVar(name='lib.map_l')])])]),
+            PPTermUnk(name='Unk', sort=PPFuncSort(args=[PPListSort(param_sort=PPTensorSort(
+                param_sort=PPBool(), shape=[PPDimConst(value=1), PPDimConst(value=1)]))], rtpe=PPFuncSort(args=[PPSortVar(name='A_1_2')], rtpe=PPSortVar(name='B_1'))))]),
+        PPFuncApp(fn=PPVar(name='lib.map_l'), args=[
+            PPVar(name='lib.recogFive')])])
 
     prog1 = PPFuncApp(fn=PPVar(name='lib.map_l'), args=[
-                             PPVar(name='lib.recogFive')])
+        PPVar(name='lib.recogFive')])
     lib = mkDefaultLib()
 
     addRecogFive(lib)
@@ -533,12 +536,12 @@ def testInfer13():
     # lib.repeat(10, Unk)
     prog = PPFuncApp(fn=PPVar(name='lib.repeat'), args=[PPIntConst(value=10), PPTermUnk(name='Unk', sort=PPFuncSort(
         args=[
-        PPListSort(param_sort=PPTensorSort(param_sort=PPReal(),
-                                           shape=[PPDimConst(value=1), PPDimConst(value=1), PPDimConst(value=28),
-                                                  PPDimConst(value=28)]))], rtpe=PPListSort(
-        param_sort=PPTensorSort(param_sort=PPReal(),
-                                shape=[PPDimConst(value=1), PPDimConst(value=1), PPDimConst(value=28),
-                                       PPDimConst(value=28)]))))])
+            PPListSort(param_sort=PPTensorSort(param_sort=PPReal(),
+                                               shape=[PPDimConst(value=1), PPDimConst(value=1), PPDimConst(value=28),
+                                                      PPDimConst(value=28)]))], rtpe=PPListSort(
+            param_sort=PPTensorSort(param_sort=PPReal(),
+                                    shape=[PPDimConst(value=1), PPDimConst(value=1), PPDimConst(value=28),
+                                           PPDimConst(value=28)]))))])
 
     prog = PPFuncApp(fn=PPVar(name='lib.repeat'), args=[PPIntConst(value=10), PPTermUnk(name='Unk', sort=PPFuncSort(
         args=[PPInt()], rtpe=PPInt()))])

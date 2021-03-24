@@ -5,8 +5,8 @@ from HOUDINI.Eval.EvaluatorUtils import \
     get_io_examples_shortest_path_mnist_maze  # get_io_examples_classify_speed, get_io_examples_shortest_path_speed_maze
 from HOUDINI.Eval.Task import Task, TaskSettings
 from HOUDINI.Eval.TaskSeq import TaskSeq, TaskSeqSettings
-from HOUDINI.FnLibraryFunctions import get_items_from_repo
-from HOUDINI.FnLibrary import FnLibrary
+from HOUDINI.Library.OpLibrary import OpLibrary
+from HOUDINI.Library.FnLibrary import FnLibrary
 from HOUDINI.Synthesizer.AST import *
 from HOUDINI.Synthesizer.MiscUtils import setup_logging
 
@@ -96,7 +96,7 @@ class GraphSeqOne(TaskSeq):
         if not dbg:
             num3, num4, num5 = 70000, 1000000, 10000
             num3b, num4b, num5b = 0, 12000, 10000
-            N= 310000
+            N = 310000
         else:
             num3, num4, num5 = 150, 150, 150
             num3b, num4b, num5b = 0, 150, 150
@@ -135,7 +135,8 @@ class GraphSeqOne(TaskSeq):
 
         tasks = [
             RegressStreetTask(regress_street_task_settings, self),
-            NavigateStreetTask(navigate_street_task_settings, self, num3=num3, num4=num4, num5=num5),
+            NavigateStreetTask(navigate_street_task_settings,
+                               self, num3=num3, num4=num4, num5=num5),
         ]
 
         super(GraphSeqOne, self).__init__(tasks, seq_settings, lib)
@@ -153,7 +154,7 @@ class GraphSeqTwo(TaskSeq):
         if not dbg:
             num3, num4, num5 = 70000, 1000000, 10000
             num3b, num4b, num5b = 0, 12000, 10000
-            N= 310000
+            N = 310000
         else:
             num3, num4, num5 = 150, 150, 150
             num3b, num4b, num5b = 0, 150, 150
@@ -198,11 +199,12 @@ class GraphSeqTwo(TaskSeq):
             dbg_learn_parameters=settings["dbg_learn_parameters"]
         )
 
-
         tasks = [
             RegressMNISTTask(regress_mnist_task_settings, self),
-            NavigateMNISTTask(navigate_mnist_task_settings, self, num3=num3, num4=num4, num5=num5),
-            NavigateStreetTask(navigate_street_task_settings, self, num3=num3b, num4=num4b, num5=num5b),
+            NavigateMNISTTask(navigate_mnist_task_settings,
+                              self, num3=num3, num4=num4, num5=num5),
+            NavigateStreetTask(navigate_street_task_settings,
+                               self, num3=num3b, num4=num4b, num5=num5b),
         ]
 
         super(GraphSeqTwo, self).__init__(tasks, seq_settings, lib)
@@ -244,11 +246,10 @@ def main():
     )
 
     def mkDefaultLib():
-        lib = FnLibrary()
-        lib.addItems(get_items_from_repo(['compose',
-                                          # 'map_l', 'fold_l', 'conv_l',
-                                          'conv_g', 'map_g', 'fold_g',
-                                          'zeros', 'repeat']))
+        lib = OpLibrary(['compose',
+                         # 'map_l', 'fold_l', 'conv_l',
+                         'conv_g', 'map_g', 'fold_g',
+                         'zeros', 'repeat'])
         return lib
 
     def mkSeq(seq_id_in):

@@ -1,23 +1,15 @@
-from typing import Dict, Optional
 import torch.nn as nn
 import pickle
 import os.path
+from typing import Dict, Optional, NamedTuple, List
 
-from HOUDINI.Synthesizer.AST import *
 from HOUDINI.Synthesizer.AST import PPSort
 from HOUDINI.Synthesizer.Utils.MiscUtils import createDir
 
-"""
-t = PPSortVar('T')
-t1 = PPSortVar('T1')
-t2 = PPSortVar('T2')
-"""
 
-
-class PPLibItem(NamedTuple('PPLibItem', [('name', str),
-                                         ('sort', PPSort),
-                                         ('obj', object)])):
-    pass
+PPLibItem = NamedTuple('PPLibItem', [('name', str),
+                                     ('sort', PPSort),
+                                     ('obj', object)])
 
 
 class FnLibrary:
@@ -25,35 +17,35 @@ class FnLibrary:
         self.items: Dict[str, PPLibItem] = {}
         # self._add_python_fns()
 
-    def save(self, location):
-        """
-        Saves the neural networks if already not on disk.
-        Saves the name-sort dictionary to lib.pickle
-        """
+    # def save(self, location):
+    #     """
+    #     Saves the neural networks if already not on disk.
+    #     Saves the name-sort dictionary to lib.pickle
+    #     """
 
-        def isNN(anObj):
-            return issubclass(type(anObj), nn.Module)
+    #     def isNN(anObj):
+    #         return issubclass(type(anObj), nn.Module)
 
-        if not os.path.exists(location):
-            createDir(location)
+    #     if not os.path.exists(location):
+    #         createDir(location)
 
-        for name, li in self.items.items():
-            if isNN(li.obj):
-                nnFileName = location + '/' + name + '.pth'
-                if not os.path.isfile(nnFileName):
-                    createDir(location)
-                    li.obj.save(location)
-            else:
-                pass
+    #     for name, li in self.items.items():
+    #         if isNN(li.obj):
+    #             nnFileName = location + '/' + name + '.pth'
+    #             if not os.path.isfile(nnFileName):
+    #                 createDir(location)
+    #                 li.obj.save(location)
+    #         else:
+    #             pass
 
-        newDict = {}
-        for name, li in self.items.items():
-            newDict[name] = (li.sort, isNN(li.obj))
+    #     newDict = {}
+    #     for name, li in self.items.items():
+    #         newDict[name] = (li.sort, isNN(li.obj))
 
-        with open(location + '/lib.pickle', 'wb') as fh:
-            pickle.dump(newDict, fh, protocol=pickle.HIGHEST_PROTOCOL)
+    #     with open(location + '/lib.pickle', 'wb') as fh:
+    #         pickle.dump(newDict, fh, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def save1(self, location, id):
+    def save(self, location, id):
         """
         Saves the neural networks if already not on disk.
         Saves the name-sort dictionary to lib.pickle

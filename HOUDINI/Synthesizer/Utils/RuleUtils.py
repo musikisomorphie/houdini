@@ -1,8 +1,7 @@
 from typing import Callable, Optional, List
 
-from HOUDINI import FnLibrary
-from HOUDINI.FnLibrary import PPLibItem
-from HOUDINI.Synthesizer import AST, ASTDSL
+from HOUDINI.Library.FnLibrary import PPLibItem, FnLibrary
+from HOUDINI.Synthesizer import AST
 from HOUDINI.Synthesizer.Utils import ASTUtils, SubstUtils, ReprUtils, ScopeUtils
 
 # global gUseTypes
@@ -104,8 +103,11 @@ def expandToFuncApp(lib: FnLibrary,
     nt = ASTUtils.getNthNT(term, ntId)
 
     libItem = alphaConvertLibItem(libItem, term)
+    # print(nt.sort)
     # TODO: expandToVar passed nt.sort as second argument
     subst = SubstUtils.unifyOne(nt.sort, libItem.sort.rtpe)
+    # print('subst {}'.format(subst))
+    # print()
 
     # if not gUseTypes:
     #     if subst is None:
@@ -114,12 +116,15 @@ def expandToFuncApp(lib: FnLibrary,
     if subst is not None:
         nts = [AST.PPTermNT('Z', arg_sort) for arg_sort in libItem.sort.args]
         fnApp = AST.PPFuncApp(AST.PPVar(libItem.name), nts)
-
         termUnified = SubstUtils.applySubst(subst, term)
+        # print('{} \n{}'.format(termUnified, term))
+        # print()
         fnAppUnified = SubstUtils.applySubst(subst, fnApp)
-
+        # print('fnAppUnified {}'.format(fnAppUnified))
+        # print()
         resTerm = ReprUtils.replaceNthNT(termUnified, ntId, fnAppUnified)
-
+        # print('outterm {}'.format(resTerm))
+        # print()
     return resTerm
 
 
@@ -137,7 +142,7 @@ def expandToUnk(term: AST.PPTerm,
        isinstance(nt.sort, AST.PPInt):
         return None
 
-    unk = ASTDSL.mkUnk(nt.sort)
+    unk = AST.mkUnk(nt.sort)
 
     # subst = unifyOne(unk.sort, nt.sort)
     #
@@ -201,8 +206,8 @@ def applyExpandToUnk(lib: FnLibrary,
     return res
 
 
-def applyExpandToFuncApp(lib: FnLibrary, 
-                         term: AST.PPTerm, 
+def applyExpandToFuncApp(lib: FnLibrary,
+                         term: AST.PPTerm,
                          ntId: int) -> List[AST.PPTerm]:
     varDecls = ScopeUtils.getAllFnVarsInScope(lib, term, ntId)
 
@@ -220,8 +225,8 @@ def applyExpandToFuncApp(lib: FnLibrary,
     return res
 
 
-def applyExpandEnum(lib: FnLibrary, 
-                    term: AST.PPTerm, 
+def applyExpandEnum(lib: FnLibrary,
+                    term: AST.PPTerm,
                     ntId: int) -> List[AST.PPTerm]:
     res = []
 
@@ -238,8 +243,8 @@ def applyExpandEnum(lib: FnLibrary,
     return res
 
 
-def applyExpandDimConst(lib: FnLibrary, 
-                        term: AST.PPTerm, 
+def applyExpandDimConst(lib: FnLibrary,
+                        term: AST.PPTerm,
                         ntId: int) -> List[AST.PPTerm]:
     res = []
     nxtTerm = expandDimConst(term, ntId)

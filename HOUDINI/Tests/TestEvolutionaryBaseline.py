@@ -1,6 +1,6 @@
-from HOUDINI.FnLibraryFunctions import get_items_from_repo
-from HOUDINI.FnLibrary import FnLibrary, PPLibItem
-from HOUDINI.Synthesizer.ASTDSL import *
+from HOUDINI.Library.OpLibrary import OpLibrary
+from HOUDINI.Library.FnLibrary import FnLibrary, PPLibItem
+from HOUDINI.Synthesizer.AST import *
 from HOUDINI.Synthesizer.ReprUtils import repr_py
 from HOUDINI.Synthesizer.SymbolicSynthesizer import SymbolicSynthesizer
 
@@ -13,7 +13,8 @@ def mkCountDigitProgram():
 
 def mkDefaultLib():
     lib = FnLibrary()
-    lib.addItems(get_items_from_repo(['compose', 'repeat', 'map_l', 'fold_l', 'conv_l', 'zeros']))
+    lib.addItems(OpLibrary(['compose', 'repeat', 'map_l', 
+                            'fold_l', 'conv_l', 'zeros']))
     return lib
 
 
@@ -46,12 +47,6 @@ def synthesizeCountDigitProgram():
     #     args=[PPTensorSort(param_sort=PPReal(), shape=[PPDimConst(value=1), PPDimConst(value=1)]),
     #           PPTensorSort(param_sort=PPBool(), shape=[PPDimConst(value=1), PPDimConst(value=1)])],
     #     rtpe=PPTensorSort(param_sort=PPReal(), shape=[PPDimConst(value=1), PPDimConst(value=1)]))}
-
-
-
-
-
-
 
 
 def main():

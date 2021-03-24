@@ -9,8 +9,8 @@ from typing import Dict
 import numpy as np
 
 from Data.DataProvider import NumpyDataSetIterator
-from HOUDINI.Interpreter.NeuralModules import *
-from HOUDINI.FnLibrary import FnLibrary
+from HOUDINI.Library.NN import *
+from HOUDINI.Library.FnLibrary import FnLibrary
 from HOUDINI.Synthesizer.Utils import ReprUtils
 from HOUDINI.Synthesizer.AST import *
 from HOUDINI.Synthesizer.Utils.ASTUtils import deconstruct
@@ -37,7 +37,8 @@ class Interpreter:
         self.library = library
         self.batch_size = batch_size
         self.epochs = epochs
-        self.original_num_epochs = epochs # epochs is changed according to data size, but this stays the same
+        # epochs is changed according to data size, but this stays the same
+        self.original_num_epochs = epochs
         self.lr = lr
         self.evaluate_every_n_percent = evaluate_every_n_percent
 
@@ -50,7 +51,8 @@ class Interpreter:
         trainable_parameters = []
         new_fns_dict = {}
         for uf in unknown_fns:
-            new_fns_dict[uf["name"]], c_trainable_params = get_nn_from_params_dict(uf)
+            new_fns_dict[uf["name"]
+                         ], c_trainable_params = get_nn_from_params_dict(uf)
             if "freeze" in uf and uf["freeze"]:
                 print("freezing the weight of {}".format(uf["name"]))
                 continue
@@ -71,7 +73,8 @@ class Interpreter:
                 if issubclass(type(io_eg), NumpyDataSetIterator):
                     loaders_list.append(io_eg)
                 elif type(io_eg) == tuple:
-                    loaders_list.append(NumpyDataSetIterator(io_eg[0], io_eg[1], self.batch_size))
+                    loaders_list.append(NumpyDataSetIterator(
+                        io_eg[0], io_eg[1], self.batch_size))
                 else:
                     raise NotImplementedError
             return loaders_list
@@ -86,11 +89,12 @@ class Interpreter:
         if issubclass(type(data_loader), NumpyDataSetIterator):
             data_loader = [data_loader]
 
-        dl_iters_list = list(data_loader) # creating a shallow copy of the list of iterators
+        # creating a shallow copy of the list of iterators
+        dl_iters_list = list(data_loader)
         while dl_iters_list.__len__() > 0:
             data_sample = None
             while data_sample is None and dl_iters_list.__len__() > 0:
-                #choose an iterator at random
+                # choose an iterator at random
                 c_rndm_iterator = random.choice(dl_iters_list)
                 # try to get a data sample from it
                 try:
@@ -103,8 +107,10 @@ class Interpreter:
                 x, y = data_sample
                 x = torch.from_numpy(x)
                 y = torch.from_numpy(y)
-                x = Variable(x).cuda() if torch.cuda.is_available() else Variable(x)
-                y = Variable(y).cuda() if torch.cuda.is_available() else Variable(y)
+                x = Variable(
+                    x).cuda() if torch.cuda.is_available() else Variable(x)
+                y = Variable(
+                    y).cuda() if torch.cuda.is_available() else Variable(y)
                 # global_vars = {"lib": self.library, "inputs": x}
                 global_vars = {"lib": self.library}
                 global_vars = {**global_vars, **new_fns_dict}
@@ -119,7 +125,8 @@ class Interpreter:
         if issubclass(type(data_loader), NumpyDataSetIterator):
             num_datapoints = data_loader.num_datapoints
         else:
-            num_datapoints = reduce(lambda a, b: a + b.num_datapoints, data_loader, 0.)
+            num_datapoints = reduce(
+                lambda a, b: a + b.num_datapoints, data_loader, 0.)
         # num_datapoints = data_loader.dataset.__len__() if type(data_loader) == DataLoader else data_loader[0].dataset.__len__()
         for y_pred, y in self._predict_data(program, data_loader, new_fns_dict):
 
@@ -134,7 +141,8 @@ class Interpreter:
 
                 if graph.__len__() > 0 and type(graph[0]) == list:
                     # concatenate all along cols
-                    graph = [[torch.unsqueeze(j, dim=2) for j in i] for i in graph]
+                    graph = [[torch.unsqueeze(j, dim=2)
+                              for j in i] for i in graph]
                     graph = [torch.cat(i, dim=2) for i in graph]
 
                     # concatenate along rows
@@ -151,24 +159,28 @@ class Interpreter:
                 for d in range(1, y_pred_output.shape.__len__()):
                     num_outputs_per_data_point *= y_pred_output.shape[d]
                 torch_mse = F.mse_loss(y_pred_output, y, reduction='sum')
-                mse += (torch_mse.cpu().data.numpy() / float(num_outputs_per_data_point))
+                mse += (torch_mse.cpu().data.numpy() /
+                        float(num_outputs_per_data_point))
 
             if output_type == ProgramOutputType.INTEGER or output_type == ProgramOutputType.SIGMOID:
                 y_pred_int = y_pred_output.data.cpu().numpy().round().astype(np.int)
                 y_int = y.data.cpu().numpy().round().astype(np.int)
-                c_num_matching_datapoints += (y_pred_int == y_int).astype(np.float32).sum()
+                c_num_matching_datapoints += (y_pred_int ==
+                                              y_int).astype(np.float32).sum()
             else:
                 # y_pred_output_np = y_pred_output.data.cpu().numpy()
-                y_pred_int = y_pred_output.data.cpu().numpy().argmax(axis=1).reshape(-1, 1)  # get the index of the max log-probability
+                y_pred_int = y_pred_output.data.cpu().numpy().argmax(
+                    axis=1).reshape(-1, 1)  # get the index of the max log-probability
                 y_int = y.data.cpu().numpy().reshape(-1, 1)
-                c_num_matching_datapoints += (y_pred_int == y_int).astype(np.float32).sum()
+                c_num_matching_datapoints += (y_pred_int ==
+                                              y_int).astype(np.float32).sum()
 
         accuracy = c_num_matching_datapoints / float(num_datapoints)
         mse = mse / float(num_datapoints)
         rmse = math.sqrt(mse)
         # if type(mse) == Variable:
 
-        #returning -rmse, so that we select the best performance.
+        # returning -rmse, so that we select the best performance.
         return -rmse if output_type == ProgramOutputType.INTEGER else accuracy
 
     def _clone_hidden_state(self, state):
@@ -177,26 +189,12 @@ class Interpreter:
             result[key] = val.clone()
         return result
 
-    def get_lib_names(self, term: PPTerm)-> List[str]:
-
-        if isinstance(term, PPVar):
-            name = term.name
-            if name[:4] == "lib.":
-                return [name[4:]]
-            else:
-                return []
-        else:
-            nts = []
-            for c in deconstruct(term):
-                cnts = self.get_lib_names(c)
-                nts.extend(cnts)
-            return nts
-
     def learn_neural_network_(self, program, output_type, new_fns_dict, trainable_parameters,
                               data_loader_tr: NumpyDataSetIterator, data_loader_val: NumpyDataSetIterator,
                               data_loader_test: NumpyDataSetIterator):
         if trainable_parameters is not None and trainable_parameters.__len__() == 0:
-            print("Warning! learn_neural_network_ called, with no learnable parameters! returning -inf accuracy.")
+            print(
+                "Warning! learn_neural_network_ called, with no learnable parameters! returning -inf accuracy.")
             return new_fns_dict, -sys.float_info.max, 0.0001
         if output_type == ProgramOutputType.INTEGER:
             criterion = torch.nn.MSELoss()
@@ -212,17 +210,21 @@ class Interpreter:
         if issubclass(type(data_loader_tr), NumpyDataSetIterator):
             num_datapoints_tr = data_loader_tr.num_datapoints
         else:
-            num_datapoints_tr = reduce(lambda a, b: a + b.num_datapoints, data_loader_tr, 0.)
+            num_datapoints_tr = reduce(
+                lambda a, b: a + b.num_datapoints, data_loader_tr, 0.)
 
-        num_iterations_in_1_epoch = num_datapoints_tr // self.batch_size + (0 if num_datapoints_tr % self.batch_size == 0 else 1)
+        num_iterations_in_1_epoch = num_datapoints_tr // self.batch_size + \
+            (0 if num_datapoints_tr % self.batch_size == 0 else 1)
         num_iterations = num_iterations_in_1_epoch * self.epochs
-        evaluate_every_n_iters = int(self.evaluate_every_n_percent*num_iterations/100.)
+        evaluate_every_n_iters = int(
+            self.evaluate_every_n_percent*num_iterations/100.)
         evaluate_every_n_iters = 1 if evaluate_every_n_iters == 0 else evaluate_every_n_iters
         # print("evaluate_every_n_iters=", evaluate_every_n_iters)
 
         # ***************** Train *****************
         max_accuracy = -sys.float_info.max
-        max_accuracy_new_fns_states = {}  # a dictionary of state_dicts for each new neural module
+        # a dictionary of state_dicts for each new neural module
+        max_accuracy_new_fns_states = {}
         accuracies_val = []
         accuracies_test = []
         iterations = []
@@ -247,7 +249,8 @@ class Interpreter:
 
                     if y_pred.__len__() > 0 and type(y_pred[0]) == list:
                         # concatenate all along cols
-                        y_pred = [[torch.unsqueeze(j, dim=2) for j in i] for i in y_pred]
+                        y_pred = [[torch.unsqueeze(j, dim=2)
+                                   for j in i] for i in y_pred]
                         y_pred = [torch.cat(i, dim=2) for i in y_pred]
 
                         # concatenate along rows
@@ -255,7 +258,7 @@ class Interpreter:
                         y_pred = torch.cat(y_pred, dim=2)
                     y_pred = y_pred[:, 1, :, :]
                 if type(y_pred) == tuple:
-                    #if it's a tuple, then its (output_logits, output)
+                    # if it's a tuple, then its (output_logits, output)
                     loss = criterion(y_pred[0], y)
                 else:
                     # print(y.max())
@@ -267,12 +270,14 @@ class Interpreter:
                 loss.backward()
                 optimizer.step()
 
-                if current_iteration%evaluate_every_n_iters == 0 or (epoch == self.epochs-1 and current_iteration == num_iterations-1):
+                if current_iteration % evaluate_every_n_iters == 0 or (epoch == self.epochs-1 and current_iteration == num_iterations-1):
                     # set all new functions to eval mode
                     for key, value in new_fns_dict.items():
                         value.eval()
-                    c_accuracy = self._get_accuracy(program, data_loader_val, output_type, new_fns_dict)
-                    c_accuracy_test = self._get_accuracy(program, data_loader_test , output_type, new_fns_dict)
+                    c_accuracy = self._get_accuracy(
+                        program, data_loader_val, output_type, new_fns_dict)
+                    c_accuracy_test = self._get_accuracy(
+                        program, data_loader_test, output_type, new_fns_dict)
 
                     accuracies_val.append(c_accuracy)
                     accuracies_test.append(c_accuracy_test)
@@ -282,7 +287,8 @@ class Interpreter:
                         max_accuracy = c_accuracy
                         # store the state_dictionary of the best performing model
                         for new_fn_name, new_fn in new_fns_dict.items():
-                            max_accuracy_new_fns_states[new_fn_name] = self._clone_hidden_state(new_fn.state_dict())
+                            max_accuracy_new_fns_states[new_fn_name] = self._clone_hidden_state(
+                                new_fn.state_dict())
 
                     print("c_accuracy", c_accuracy)
 
@@ -293,7 +299,7 @@ class Interpreter:
                 current_iteration += 1
 
         print("max_accuracy_found_during_training:", max_accuracy)
-        #set the state_dictionaries of the new functions to the model with best validation accuracy
+        # set the state_dictionaries of the new functions to the model with best validation accuracy
         for new_fn_name, new_fn in new_fns_dict.items():
             new_fn.load_state_dict(max_accuracy_new_fns_states[new_fn_name])
 
@@ -311,7 +317,7 @@ class Interpreter:
 
     def _learn_neural_network(self, program, output_type, unknown_fns,
                               data_loader_tr: NumpyDataSetIterator, data_loader_val: NumpyDataSetIterator,
-                              data_loader_test:NumpyDataSetIterator):
+                              data_loader_test: NumpyDataSetIterator):
         # ***************** Set up the model *****************
         new_fns_dict, trainable_parameters = self.create_nns(unknown_fns)
         return self.learn_neural_network_(program, output_type, new_fns_dict, trainable_parameters, data_loader_tr, data_loader_val,
@@ -345,25 +351,28 @@ class Interpreter:
                 new_fns_dict, _ = self.create_nns(unknown_fns_def)
             else:
                 new_fns_dict, val_accuracy, evaluations_np = self._learn_neural_network(program, output_type, unknown_fns_def,
-                                                                        data_loader_tr, data_loader_val, data_loader_test)
-        val_accuracy = self._get_accuracy(program, data_loader_val, output_type, new_fns_dict)
-        test_accuracy = self._get_accuracy(program, data_loader_test, output_type, new_fns_dict)
+                                                                                        data_loader_tr, data_loader_val, data_loader_test)
+        val_accuracy = self._get_accuracy(
+            program, data_loader_val, output_type, new_fns_dict)
+        test_accuracy = self._get_accuracy(
+            program, data_loader_test, output_type, new_fns_dict)
         print("validation accuracy=", val_accuracy)
         print("test accuracy=", test_accuracy)
         return {"accuracy": val_accuracy, "new_fns_dict": new_fns_dict,
                 "test_accuracy": test_accuracy, "evaluations_np": evaluations_np}
 
     # program=st, output_type=output_type, unkSortMap=unkSortMap, io_examples=self.ioExamples
-    def evaluate(self, program, output_type_s, unkSortMap = None,
+    def evaluate(self, program, output_type_s, unkSortMap=None,
                  io_examples_tr=None, io_examples_val=None, io_examples_test=None, dbg_learn_parameters=True) -> dict:
 
         is_graph = type(output_type_s) == PPGraphSort
 
         program_str = ReprUtils.repr_py(program)
-        output_type = self.get_program_output_type(io_examples_val, output_type_s)
+        output_type = self.get_program_output_type(
+            io_examples_val, output_type_s)
 
         unknown_fns_def = _get_unknown_fns_definitions(unkSortMap, is_graph)
-        res = self.evaluate_(program = program_str, output_type=output_type, unknown_fns_def=unknown_fns_def,
+        res = self.evaluate_(program=program_str, output_type=output_type, unknown_fns_def=unknown_fns_def,
                              io_examples_tr=io_examples_tr, io_examples_val=io_examples_val,
                              io_examples_test=io_examples_test,
                              dbg_learn_parameters=dbg_learn_parameters)
@@ -416,38 +425,43 @@ def _get_unknown_fns_definitions(unkSortMap, is_graph=False):
             if type(output_type) == PPReal or type(output_type) == PPInt:
                 output_activation = None
             elif type(output_type) == PPBool and output_dim == 1:
-                output_activation = F.sigmoid
+                output_activation = torch.sigmoid
             elif type(output_type) == PPBool and output_dim > 1:
                 output_activation = nn.Softmax(dim=1)
             else:
                 raise NotImplementedError()
-        elif not (type(fn_output_sort) == PPTensorSort and fn_output_sort.shape.__len__() == 4): # the only other possibility
+        # the only other possibility
+        elif not (type(fn_output_sort) == PPTensorSort and fn_output_sort.shape.__len__() == 4):
             raise NotImplementedError()
 
         fn_input_sort = unk_fn.args[0]
         if type(fn_input_sort) == PPListSort:
             if is_graph:
                 input_dim = fn_input_sort.param_sort.shape[1].value
-                uf = {"type": "GCONVNew", "name": unk_fn_name, "input_dim": input_dim}
+                uf = {"type": "GCONVNew", "name": unk_fn_name,
+                      "input_dim": input_dim}
                 unk_fns_interpreter_def_list.append(uf)
             else:
                 input_list_item_sort = fn_input_sort.param_sort
-                assert(type(input_list_item_sort) == PPTensorSort) # make sure the items in the list are tensors
+                # make sure the items in the list are tensors
+                assert(type(input_list_item_sort) == PPTensorSort)
                 input_dim = fn_input_sort.param_sort.shape[1].value
                 hidden_dim = 100
                 uf = {"type": "RNN", "name": unk_fn_name, "input_dim": input_dim, "hidden_dim": hidden_dim,
-                      "output_dim":output_dim, "output_activation":output_activation}
+                      "output_dim": output_dim, "output_activation": output_activation}
                 unk_fns_interpreter_def_list.append(uf)
         elif type(fn_input_sort) == PPTensorSort and fn_input_sort.shape.__len__() == 4:
             if type(fn_output_sort) == PPTensorSort and fn_output_sort.shape.__len__() == 4:
                 # it's a cnn
                 input_dim = fn_input_sort.shape[2].value
                 input_ch = fn_input_sort.shape[1].value
-                uf = {"type": "CNN", "name": unk_fn_name, "input_dim": input_dim, "input_ch": input_ch}
+                uf = {"type": "CNN", "name": unk_fn_name,
+                      "input_dim": input_dim, "input_ch": input_ch}
                 unk_fns_interpreter_def_list.append(uf)
             elif type(fn_output_sort) == PPTensorSort and fn_output_sort.shape.__len__() == 2:
                 # FROM CNN's features to a vector using an MLP
-                input_dim = fn_input_sort.shape[1].value * fn_input_sort.shape[2].value * fn_input_sort.shape[3].value
+                input_dim = fn_input_sort.shape[1].value * \
+                    fn_input_sort.shape[2].value * fn_input_sort.shape[3].value
                 uf = {"type": "MLP", "name": unk_fn_name, "input_dim": input_dim,
                       "output_dim": output_dim, "output_activation": output_activation}
                 unk_fns_interpreter_def_list.append(uf)
@@ -465,8 +479,8 @@ def _get_unknown_fns_definitions(unkSortMap, is_graph=False):
         else:
             raise NotImplementedError()
 
-        #uf = {"type": "CNN", "name": "nn_fun_1", "input_dim": 28,
-        #      "input_ch": 1, "output_dim": 1, "output_activation": F.sigmoid, "is_last": False}
-        #unk_fns_interpreter_def_list.append(uf)
+        # uf = {"type": "CNN", "name": "nn_fun_1", "input_dim": 28,
+        #      "input_ch": 1, "output_dim": 1, "output_activation": torch.sigmoid, "is_last": False}
+        # unk_fns_interpreter_def_list.append(uf)
 
     return unk_fns_interpreter_def_list

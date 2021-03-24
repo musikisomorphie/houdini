@@ -3,11 +3,11 @@ from functools import wraps
 from itertools import product
 from typing import List, Optional, Tuple, Iterable, Dict
 
-from HOUDINI.FnLibraryFunctions import get_items_from_repo
-from HOUDINI.FnLibrary import FnLibrary
+from HOUDINI.Library.OpLibrary import OpLibrary
+from HOUDINI.Library.FnLibrary import FnLibrary
 from HOUDINI.Synthesizer.Utils import MiscUtils, RuleUtils, ASTUtils
 from HOUDINI.Synthesizer.AST import PPTerm, PPTermNT, PPFuncSort, PPTermUnk, PPSort, PPFuncApp, PPDimVar
-from HOUDINI.Synthesizer.ASTDSL import mkFuncSort, mkRealTensorSort, mkBoolTensorSort
+from HOUDINI.Synthesizer.AST import mkFuncSort, mkRealTensorSort, mkBoolTensorSort
 from HOUDINI.Synthesizer.Utils.ASTUtils import progTreeSize, inferType, \
     deconstructProg, constructProg, applyTdProgGeneral, isAbstract, progDepth
 from HOUDINI.Synthesizer.Utils.SubstUtils import substSortVar
@@ -16,6 +16,7 @@ from HOUDINI.Synthesizer.Utils.ReprUtils import repr_py, repr_py_sort, repr_py_a
 from HOUDINI.Synthesizer.SymbolicSynthesizer import Action
 
 POPULATION_SIZE = 20
+
 
 class ProgramGenerator:
     def __init__(self, lib: FnLibrary):
@@ -79,7 +80,7 @@ class ProgramGenerator:
 
 
 class SymbolicSynthesizerEA:
-    def __init__(self, lib: FnLibrary, sort: PPFuncSort, nnprefix='', concreteTypes: List[PPSort]=[]):
+    def __init__(self, lib: FnLibrary, sort: PPFuncSort, nnprefix='', concreteTypes: List[PPSort] = []):
         self.size = POPULATION_SIZE  # population size
         self.lib = lib
         self.sort = sort
@@ -138,7 +139,8 @@ class SymbolicSynthesizerEA:
         for prog in progs:
             if self.concreteTypes:
                 maxSortVarsToBeInstantiated = 2
-                eprogs = substSortVar(prog, self.concreteTypes, maxSortVarsToBeInstantiated)
+                eprogs = substSortVar(
+                    prog, self.concreteTypes, maxSortVarsToBeInstantiated)
                 newProgs.extend(eprogs)
             else:
                 newProgs.append(prog)
@@ -168,7 +170,8 @@ class SymbolicSynthesizerEA:
         def impl(self, scores):
             print('GENPROGS START: scores: ', str(scores))
             progUnks = _genProgs(self, scores)
-            print('GENPROGS END: progs: ', ['None' if p is None else repr_py(p) for (p, unks) in progUnks])
+            print('GENPROGS END: progs: ', [
+                  'None' if p is None else repr_py(p) for (p, unks) in progUnks])
             # print('progs: ', progUnks)
             return progUnks
 
@@ -187,7 +190,6 @@ class SymbolicSynthesizerEA:
             res.append((prog, unkSortMap))
 
         return res
-
 
     @logEntryExit('SymbolicSynthesizerEA::genProgs')
     def genProgs(self, progScores: List[Tuple[PPTerm, float]]) -> Iterable[Tuple[PPTerm, Dict[str, PPSort]]]:
@@ -382,8 +384,8 @@ def crossover(term1, term2, lib, selPairIndex=None):
 
 
 def mkDefaultLib() -> FnLibrary:
-    lib = FnLibrary()
-    lib.addItems(get_items_from_repo(['compose', 'repeat', 'map_l', 'fold_l', 'conv_l', 'zeros']))
+    lib = OpLibrary(['compose', 'repeat', 'map_l', 
+                     'fold_l', 'conv_l', 'zeros'])
     return lib
 
 
@@ -427,7 +429,8 @@ def randomProportionalSelection(freqs):
 
 def main2():
     # freqs = [0.1, 0.2, 0.4, 0.8, 0.16, 0.5, 0.10]
-    freqs = [-100.0, -100.0, -100.0, -100.0, -100.0, -100.0, -100.0, -100.0, -100.0, -100.0, -4.3]
+    freqs = [-100.0, -100.0, -100.0, -100.0, -100.0, -
+             100.0, -100.0, -100.0, -100.0, -100.0, -4.3]
     # freqs = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
     max_freq = max(freqs)

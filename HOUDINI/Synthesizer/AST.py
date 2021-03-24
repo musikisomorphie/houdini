@@ -75,5 +75,47 @@ PPSortOrDim = Union[PPSort, PPDim]
 PP = Union[PPSort, PPDim, PPDecl, PPTerm, PPNT]
 
 
+def mkListSort(sort: PPSort) -> PPListSort:
+    return PPListSort(sort)
+
+
+def mkGraphSort(sort: PPSort) -> PPGraphSort:
+    return PPGraphSort(sort)
+
+
+def mkUnk(sort: PPSort) -> PPTermUnk:
+    return PPTermUnk('Unk', sort)
+
+
+def mkFuncSort(*sortlist) -> PPFuncSort:
+    return PPFuncSort(list(sortlist[:-1]), sortlist[-1])
+
+
+def mkTensorSort(sort: PPSort,
+                 rdims: Union[str, int]) -> PPTensorSort:
+    dims = []
+    for rdim in rdims:
+        if type(rdim) == str:
+            dims.append(PPDimVar(rdim))
+        elif type(rdim) == int:
+            dims.append(PPDimConst(rdim))
+        else:
+            raise Exception("Unhandled dimension")
+
+    return PPTensorSort(sort, dims)
+
+
+def mkIntTensorSort(rdims) -> PPTensorSort:
+    return mkTensorSort(PPInt(), rdims)
+
+
+def mkRealTensorSort(rdims) -> PPTensorSort:
+    return mkTensorSort(PPReal(), rdims)
+
+
+def mkBoolTensorSort(rdims) -> PPTensorSort:
+    return mkTensorSort(PPBool(), rdims)
+
+
 if __name__ == '__main__':
     print(PP)

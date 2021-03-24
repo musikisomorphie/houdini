@@ -3,9 +3,9 @@ import time
 from typing import Tuple, Dict, NamedTuple, List
 
 from HOUDINI.Interpreter.Interpreter import Interpreter
-from HOUDINI.InterpreterFilters import is_evaluable
-from HOUDINI.FnLibraryFunctions import NotHandledException
-from HOUDINI.FnLibrary import FnLibrary, PPLibItem
+from HOUDINI.Interpreter.Utils.EvalUtils import is_evaluable
+from HOUDINI.Library.Op import NotHandledException
+from HOUDINI.Library.FnLibrary import FnLibrary, PPLibItem
 from HOUDINI.Synthesizer.AST import PPTerm, PPSort, PPFuncSort
 from HOUDINI.Synthesizer.Utils.MiscUtils import getElapsedTime, formatTime
 from HOUDINI.Synthesizer.Utils.ReprUtils import repr_py
@@ -24,7 +24,8 @@ class NSDebugInfo:
 
 
 def _debug_info(prog: PPTerm, unkSortMap, lib: FnLibrary, fnSort: PPSort):
-    lib_items = [PPLibItem(li.name, li.sort, None) for (_, li) in lib.items.items()]
+    lib_items = [PPLibItem(li.name, li.sort, None)
+                 for (_, li) in lib.items.items()]
     dprog = """
     io_examples_tr, io_examples_val = None, None
     prog = %s
@@ -49,14 +50,15 @@ class NeuralSynthesizerEAResult:
                  numProgsEvaluated: int):
         # A list of top scoring programs
         self.top_k_solutions_results = top_k_solutions_results
-        self.progScores = progScores # genid -> progid -> (PPTerm, float)
+        self.progScores = progScores  # genid -> progid -> (PPTerm, float)
         self.numProgsEvaluated = numProgsEvaluated
 
     def get_top_solution_score(self):
         """
         Top scoring program and corresponding score
         """
-        top_solution_score = self.top_k_solution_scores[0] if len(self.top_k_solution_scores) else None
+        top_solution_score = self.top_k_solution_scores[0] if len(
+            self.top_k_solution_scores) else None
         return top_solution_score
 
 
@@ -77,7 +79,8 @@ def logUnhandledProgram(prog):
 def logEvaluatorException(e, prog, unkSortMap, lib, sort):
     loggerE = logging.getLogger('pp.exceptions')
     loggerE.error('Exception in the Interpreter.\n %s' % repr(e))
-    loggerE.error('DebugInfo.\n %s' % _debug_info(prog, unkSortMap, lib, sort)[0].dprog)
+    loggerE.error('DebugInfo.\n %s' % _debug_info(
+        prog, unkSortMap, lib, sort)[0].dprog)
 
 
 def logIsEvaluableException(e, prog, unkSortMap, lib, sort):
@@ -121,10 +124,10 @@ class NeuralSynthesizerEA:
         for i in range(1, topKSolutionResults.__len__()):
             topKSolutionResults[i][1]["new_fns_dict"] = None
 
-
     def interpret2(self, prog, unkSortMap, ioExamplesTr, ioExamplesVal, ioExamplesTest):
         try:
-            interpreterRes = self.interpret(prog, unkSortMap, ioExamplesTr, ioExamplesVal, ioExamplesTest)
+            interpreterRes = self.interpret(
+                prog, unkSortMap, ioExamplesTr, ioExamplesVal, ioExamplesTest)
         except NotHandledException as e:
             logUnhandledProgram(prog)
             interpreterRes = None
@@ -161,13 +164,15 @@ class NeuralSynthesizerEA:
             if isOk:
                 nonlocal m
                 m += 1
-                interpreterRes = self.interpret2(prog, unkSortMap, ioExamplesTr, ioExamplesVal, ioExamplesTest)
+                interpreterRes = self.interpret2(
+                    prog, unkSortMap, ioExamplesTr, ioExamplesVal, ioExamplesTest)
                 if interpreterRes is not None:
                     progScore = interpreterRes['accuracy']
                     topKSolutionResults.append((prog, interpreterRes))
                     self.updateTopK(topKSolutionResults)
                 else:
-                    progScore = - 100.0  # - float('int) is causing problem in randomProportionalSelection
+                    # - float('int) is causing problem in randomProportionalSelection
+                    progScore = - 100.0
             else:
                 progScore = - 100.0
 
@@ -193,5 +198,5 @@ class NeuralSynthesizerEA:
                     break
 
         processGens()
-        print('Generations: %d' % len(progScoresAll))  #TODO: Remove this
+        print('Generations: %d' % len(progScoresAll))  # TODO: Remove this
         return NeuralSynthesizerEAResult(topKSolutionResults, progScoresAll, m)

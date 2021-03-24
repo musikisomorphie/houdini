@@ -1,5 +1,5 @@
 from HOUDINI.Synthesizer.AST import *
-from HOUDINI.Synthesizer.ASTDSL import mkTensorSort
+# from HOUDINI.Synthesizer.AST import mkTensorSort
 from HOUDINI.Synthesizer.SubstUtils import unifyLists, applySubst
 
 

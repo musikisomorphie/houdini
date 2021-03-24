@@ -9,8 +9,8 @@
 from HOUDINI.Eval.EvaluatorUtils import get_io_examples_classify_digits, get_io_examples_sum_digits
 from HOUDINI.Eval.Task import Task, TaskSettings
 from HOUDINI.Eval.TaskSeq import TaskSeq, TaskSeqSettings
-from HOUDINI.FnLibrary import FnLibrary
-from HOUDINI.FnLibraryFunctions import get_items_from_repo
+from HOUDINI.Library.FnLibrary import FnLibrary
+from HOUDINI.Library.OpLibrary import OpLibrary
 from HOUDINI.Synthesizer.AST import *
 from HOUDINI.Synthesizer.MiscUtils import setup_logging, getPath, getPythonPath
 
@@ -98,9 +98,8 @@ def main():
     print(getPath())
 
     def mkDefaultLib():
-        lib = FnLibrary()
-        lib.addItems(get_items_from_repo(
-            ['compose', 'repeat', 'map_l', 'fold_l', 'conv_l', 'zeros']))
+        lib = OpLibrary(['compose', 'repeat', 'map_l', 
+                         'fold_l', 'conv_l', 'zeros'])
         return lib
 
     def mkSeq(seq_id_in):

@@ -1,8 +1,8 @@
 from Data import *
 from HOUDINI.Interpreter.Interpreter import Interpreter, ProgramOutputType
-from HOUDINI.FnLibrary import FnLibrary
+from HOUDINI.Library.FnLibrary import FnLibrary
 from HOUDINI.Interpreter.LibraryTensorFunctions import addImageFunctionsToLibrary
-# from HOUDINI.Interpreter.NeuralModules import *
+# from HOUDINI.Library.NN import *
 # from HOUDINI.NewLibrary import PPLibItem
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
@@ -28,14 +28,15 @@ def plot_sequence(task_id):
     c_graph_dict.update({label_pnn: []})
     c_graph_dict.update({label_wt: []})
 
-
     for i in range(5):
-        c_graph_dict[label_sa].append("d_comb_{}_longer_seq_{}t{}_plot".format(i+1, "sa", task_id+ 1))
+        c_graph_dict[label_sa].append(
+            "d_comb_{}_longer_seq_{}t{}_plot".format(i+1, "sa", task_id + 1))
         c_graph_dict[label_np].append(tasks[task_id][i].format("np"))
         c_graph_dict[label_evol].append(tasks[task_id][i].format("evol"))
-        c_graph_dict[label_pnn].append("d_comb_{}_longer_seq_{}t{}_plot".format(i+1, "pnn", task_id + 1))
-        c_graph_dict[label_wt].append("d_comb_{}_longer_seq_{}t{}_plot".format(i+1, "wt", task_id + 1))
-
+        c_graph_dict[label_pnn].append(
+            "d_comb_{}_longer_seq_{}t{}_plot".format(i+1, "pnn", task_id + 1))
+        c_graph_dict[label_wt].append(
+            "d_comb_{}_longer_seq_{}t{}_plot".format(i+1, "wt", task_id + 1))
 
     if task_id in [0, 1, 4, 5, 6, 8]:
         ylabel = "RMSE"
@@ -61,19 +62,21 @@ def get_performance(model, task_id, x_axis_index):
         one_minus_y = True
         negate_y = False
 
-
     values = []
     for i in range(5):
         if model == 0:
-            filename = "d_comb_{}_longer_seq_{}t{}_plot".format(i+1, "sa", task_id+ 1)
+            filename = "d_comb_{}_longer_seq_{}t{}_plot".format(
+                i+1, "sa", task_id + 1)
         elif model == 1:
             filename = tasks[task_id][i].format("np")
         elif model == 2:
             filename = tasks[task_id][i].format("evol")
         elif model == 3:
-            filename = "d_comb_{}_longer_seq_{}t{}_plot".format(i+1, "pnn", task_id + 1)
+            filename = "d_comb_{}_longer_seq_{}t{}_plot".format(
+                i+1, "pnn", task_id + 1)
         elif model == 4:
-            filename = "d_comb_{}_longer_seq_{}t{}_plot".format(i+1, "wt", task_id + 1)
+            filename = "d_comb_{}_longer_seq_{}t{}_plot".format(
+                i+1, "wt", task_id + 1)
 
         file = np.load("{}/{}.npy".format(results_directory, filename))
         if file[1][x_axis_index] is not None:
@@ -136,7 +139,6 @@ def plot_sequence1(task_ids, percentage, ylabel):
             x_axis_wt.append(task_id)
             y_axis_wt.append(c_perf_wt)
 
-
     print(y_axis_sa)
     print(y_axis_np)
     print(y_axis_evol)
@@ -159,78 +161,78 @@ def plot_sequence1(task_ids, percentage, ylabel):
 
 
 results_directory = "LongerSequences/Combined"
-#for task_id in range(9):
+# for task_id in range(9):
 #    plot_sequence(task_id)
 
 
-t9 =   ["d_comb_1_longer_seq_{}/count_digit_occ_2s_plot",
-        "d_comb_2_longer_seq_{}/count_digit_occ_8s_plot",
-        "d_comb_3_longer_seq_{}/count_digit_occ_3s_plot",
-        "d_comb_4_longer_seq_{}/count_digit_occ_5s_plot",
-        "d_comb_5_longer_seq_{}/count_digit_occ_0s_plot"
-        ]
+t9 = ["d_comb_1_longer_seq_{}/count_digit_occ_2s_plot",
+      "d_comb_2_longer_seq_{}/count_digit_occ_8s_plot",
+      "d_comb_3_longer_seq_{}/count_digit_occ_3s_plot",
+      "d_comb_4_longer_seq_{}/count_digit_occ_5s_plot",
+      "d_comb_5_longer_seq_{}/count_digit_occ_0s_plot"
+      ]
 
-t8 =   ["d_comb_1_longer_seq_{}/recognize_digit_9_plot",
-        "d_comb_2_longer_seq_{}/recognize_digit_5_plot",
-        "d_comb_3_longer_seq_{}/recognize_digit_1_plot",
-        "d_comb_4_longer_seq_{}/recognize_digit_8_plot",
-        "d_comb_5_longer_seq_{}/recognize_digit_7_plot"
-        ]
+t8 = ["d_comb_1_longer_seq_{}/recognize_digit_9_plot",
+      "d_comb_2_longer_seq_{}/recognize_digit_5_plot",
+      "d_comb_3_longer_seq_{}/recognize_digit_1_plot",
+      "d_comb_4_longer_seq_{}/recognize_digit_8_plot",
+      "d_comb_5_longer_seq_{}/recognize_digit_7_plot"
+      ]
 
-t7 =   ["d_comb_1_longer_seq_{}/count_toys_0s_plot",
-        "d_comb_2_longer_seq_{}/count_toys_1s_plot",
-        "d_comb_3_longer_seq_{}/count_toys_2s_plot",
-        "d_comb_4_longer_seq_{}/count_toys_3s_plot",
-        "d_comb_5_longer_seq_{}/count_toys_4s_plot"
-        ]
+t7 = ["d_comb_1_longer_seq_{}/count_toys_0s_plot",
+      "d_comb_2_longer_seq_{}/count_toys_1s_plot",
+      "d_comb_3_longer_seq_{}/count_toys_2s_plot",
+      "d_comb_4_longer_seq_{}/count_toys_3s_plot",
+      "d_comb_5_longer_seq_{}/count_toys_4s_plot"
+      ]
 
 
-t6 =   ["d_comb_1_longer_seq_{}/count_digit_occ_9s_plot",
-        "d_comb_2_longer_seq_{}/count_digit_occ_5s_plot",
-        "d_comb_3_longer_seq_{}/count_digit_occ_1s_plot",
-        "d_comb_4_longer_seq_{}/count_digit_occ_8s_plot",
-        "d_comb_5_longer_seq_{}/count_digit_occ_7s_plot"
-        ]
+t6 = ["d_comb_1_longer_seq_{}/count_digit_occ_9s_plot",
+      "d_comb_2_longer_seq_{}/count_digit_occ_5s_plot",
+      "d_comb_3_longer_seq_{}/count_digit_occ_1s_plot",
+      "d_comb_4_longer_seq_{}/count_digit_occ_8s_plot",
+      "d_comb_5_longer_seq_{}/count_digit_occ_7s_plot"
+      ]
 
-t5 =   ["d_comb_1_longer_seq_{}/count_toys_2s_plot",
-        "d_comb_2_longer_seq_{}/count_toys_4s_plot",
-        "d_comb_3_longer_seq_{}/count_toys_3s_plot",
-        "d_comb_4_longer_seq_{}/count_toys_1s_plot",
-        "d_comb_5_longer_seq_{}/count_toys_0s_plot"
-        ]
+t5 = ["d_comb_1_longer_seq_{}/count_toys_2s_plot",
+      "d_comb_2_longer_seq_{}/count_toys_4s_plot",
+      "d_comb_3_longer_seq_{}/count_toys_3s_plot",
+      "d_comb_4_longer_seq_{}/count_toys_1s_plot",
+      "d_comb_5_longer_seq_{}/count_toys_0s_plot"
+      ]
 
-t1 =   ["d_comb_1_longer_seq_{}/count_digit_occ_7s_plot",
-        "d_comb_2_longer_seq_{}/count_digit_occ_1s_plot",
-        "d_comb_3_longer_seq_{}/count_digit_occ_9s_plot",
-        "d_comb_4_longer_seq_{}/count_digit_occ_6s_plot",
-        "d_comb_5_longer_seq_{}/count_digit_occ_4s_plot"
-        ]
+t1 = ["d_comb_1_longer_seq_{}/count_digit_occ_7s_plot",
+      "d_comb_2_longer_seq_{}/count_digit_occ_1s_plot",
+      "d_comb_3_longer_seq_{}/count_digit_occ_9s_plot",
+      "d_comb_4_longer_seq_{}/count_digit_occ_6s_plot",
+      "d_comb_5_longer_seq_{}/count_digit_occ_4s_plot"
+      ]
 
-t2 =   ["d_comb_1_longer_seq_{}/count_toys_4s_plot",
-        "d_comb_2_longer_seq_{}/count_toys_0s_plot",
-        "d_comb_3_longer_seq_{}/count_toys_1s_plot",
-        "d_comb_4_longer_seq_{}/count_toys_2s_plot",
-        "d_comb_5_longer_seq_{}/count_toys_3s_plot"
-        ]
+t2 = ["d_comb_1_longer_seq_{}/count_toys_4s_plot",
+      "d_comb_2_longer_seq_{}/count_toys_0s_plot",
+      "d_comb_3_longer_seq_{}/count_toys_1s_plot",
+      "d_comb_4_longer_seq_{}/count_toys_2s_plot",
+      "d_comb_5_longer_seq_{}/count_toys_3s_plot"
+      ]
 
-t3 =   ["d_comb_1_longer_seq_{}/recognize_toy_plot",
-        "d_comb_2_longer_seq_{}/recognize_toy_plot",
-        "d_comb_3_longer_seq_{}/recognize_toy_plot",
-        "d_comb_4_longer_seq_{}/recognize_toy_plot",
-        "d_comb_5_longer_seq_{}/recognize_toy_plot"
-        ]
+t3 = ["d_comb_1_longer_seq_{}/recognize_toy_plot",
+      "d_comb_2_longer_seq_{}/recognize_toy_plot",
+      "d_comb_3_longer_seq_{}/recognize_toy_plot",
+      "d_comb_4_longer_seq_{}/recognize_toy_plot",
+      "d_comb_5_longer_seq_{}/recognize_toy_plot"
+      ]
 
-t4 =   ["d_comb_1_longer_seq_{}/recognize_digit_9_plot",
-        "d_comb_2_longer_seq_{}/recognize_digit_5_plot",
-        "d_comb_3_longer_seq_{}/recognize_digit_1_plot",
-        "d_comb_4_longer_seq_{}/recognize_digit_8_plot",
-        "d_comb_5_longer_seq_{}/recognize_digit_7_plot"
-        ]
+t4 = ["d_comb_1_longer_seq_{}/recognize_digit_9_plot",
+      "d_comb_2_longer_seq_{}/recognize_digit_5_plot",
+      "d_comb_3_longer_seq_{}/recognize_digit_1_plot",
+      "d_comb_4_longer_seq_{}/recognize_digit_8_plot",
+      "d_comb_5_longer_seq_{}/recognize_digit_7_plot"
+      ]
 
 tasks = [t1, t2, t3, t4, t5, t6, t7, t8, t9]
 
 
-#for task_index in range(9):
+# for task_index in range(9):
 #    plot_sequence(task_index)
 
 """

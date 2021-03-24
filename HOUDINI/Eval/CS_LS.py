@@ -8,8 +8,8 @@ from HOUDINI.Eval.CS_LS_Tasks import RecognizeDigitTask, RecognizeToyTask, \
     CountToysTask, CountDigitOccTask
 from HOUDINI.Eval.Task import TaskSettings
 from HOUDINI.Eval.TaskSeq import TaskSeqSettings, TaskSeq
-from HOUDINI.FnLibraryFunctions import get_items_from_repo
-from HOUDINI.FnLibrary import FnLibrary
+from HOUDINI.Library.OpLibrary import OpLibrary
+from HOUDINI.Library.FnLibrary import FnLibrary
 
 
 class TaskType(Enum):
@@ -24,7 +24,8 @@ class Dataset(Enum):
 
 class_range_MNIST = range(10)
 class_range_smallnorb = range(5)
-SequenceTaskInfo = namedtuple("SequenceTaskInfo", ["task_type", "dataset", "index"])
+SequenceTaskInfo = namedtuple(
+    "SequenceTaskInfo", ["task_type", "dataset", "index"])
 
 
 def get_randomised_sequence(length):
@@ -38,7 +39,8 @@ def get_randomised_sequence(length):
         else:
             c_index = random.choice(class_range_smallnorb)
 
-        randomised_sequence.append(SequenceTaskInfo(task_type=c_task_type, dataset=c_dataset, index=c_index))
+        randomised_sequence.append(SequenceTaskInfo(
+            task_type=c_task_type, dataset=c_dataset, index=c_index))
 
     return randomised_sequence
 
@@ -85,7 +87,8 @@ def get_sequence_from_string(sequence_str):
 
         c_index = int(c_str[4:5])
 
-        sequence.append(SequenceTaskInfo(task_type=c_task_type, dataset=c_dataset, index=c_index))
+        sequence.append(SequenceTaskInfo(task_type=c_task_type,
+                                         dataset=c_dataset, index=c_index))
 
     return sequence
 
@@ -96,16 +99,20 @@ class CountingSequence(TaskSeq):
         tasks = []
         for tidx, task_info in enumerate(list_task_info):
             if task_info.task_type == TaskType.Recognise and task_info.dataset == Dataset.MNIST:
-                tasks.append(RecognizeDigitTask(task_settings, task_info.index, self, dbg_learn_parameters))
+                tasks.append(RecognizeDigitTask(
+                    task_settings, task_info.index, self, dbg_learn_parameters))
 
             if task_info.task_type == TaskType.Recognise and task_info.dataset == Dataset.smallnorb:
-                tasks.append(RecognizeToyTask(task_settings, task_info.index, self, dbg_learn_parameters))
+                tasks.append(RecognizeToyTask(
+                    task_settings, task_info.index, self, dbg_learn_parameters))
 
             if task_info.task_type == TaskType.Count and task_info.dataset == Dataset.MNIST:
-                tasks.append(CountDigitOccTask(task_settings, task_info.index, self, dbg_learn_parameters))
+                tasks.append(CountDigitOccTask(
+                    task_settings, task_info.index, self, dbg_learn_parameters))
 
             if task_info.task_type == TaskType.Count and task_info.dataset == Dataset.smallnorb:
-                tasks.append(CountToysTask(task_settings, task_info.index, self, dbg_learn_parameters))
+                tasks.append(CountToysTask(
+                    task_settings, task_info.index, self, dbg_learn_parameters))
 
         super(CountingSequence, self).__init__(tasks, seq_settings, lib)
 
@@ -125,16 +132,23 @@ def get_sequence_info(seq_string):
                     (6, 2, 3, 8, 1, 8, 3, 6, 5),
                     (4, 3, 4, 7, 0, 7, 4, 4, 0)]
 
-    cs1 = ["recD{0}, recD{1}, cntD{0}, cntD{1}".format(idx1, idx2) for idx1, idx2 in cs1_idx_pairs]
-    cs2 = ["recD{0}, cntD{0}, cntD{1}, recD{1}".format(idx1, idx2) for idx1, idx2 in cs2_idx_pairs]
-    cs3 = ["recD{0}, cntD{0}, cntT{1}, recT{1}".format(idx1, idx2) for idx1, idx2 in cs3_idx_pairs]
+    cs1 = ["recD{0}, recD{1}, cntD{0}, cntD{1}".format(
+        idx1, idx2) for idx1, idx2 in cs1_idx_pairs]
+    cs2 = ["recD{0}, cntD{0}, cntD{1}, recD{1}".format(
+        idx1, idx2) for idx1, idx2 in cs2_idx_pairs]
+    cs3 = ["recD{0}, cntD{0}, cntT{1}, recT{1}".format(
+        idx1, idx2) for idx1, idx2 in cs3_idx_pairs]
     ls = ["cntD{}, cntT{}, recT{}, recD{}, cntT{}, cntD{}, cntT{}, recD{}, cntD{}".format(*idx_tuple)
           for idx_tuple in ls_idx_pairs]
 
-    cs1_prefixes = ["cs1_d{}d{}".format(idx1, idx2) for idx1, idx2 in cs1_idx_pairs]
-    cs2_prefixes = ["cs2_d{}d{}".format(idx1, idx2) for idx1, idx2 in cs2_idx_pairs]
-    cs3_prefixes = ["cs3_d{}t{}".format(idx1, idx2) for idx1, idx2 in cs3_idx_pairs]
-    ls_prefixes = ["ls_d{}t{}".format(idx_tuple[0], idx_tuple[1]) for idx_tuple in ls_idx_pairs]
+    cs1_prefixes = ["cs1_d{}d{}".format(idx1, idx2)
+                    for idx1, idx2 in cs1_idx_pairs]
+    cs2_prefixes = ["cs2_d{}d{}".format(idx1, idx2)
+                    for idx1, idx2 in cs2_idx_pairs]
+    cs3_prefixes = ["cs3_d{}t{}".format(idx1, idx2)
+                    for idx1, idx2 in cs3_idx_pairs]
+    ls_prefixes = ["ls_d{}t{}".format(
+        idx_tuple[0], idx_tuple[1]) for idx_tuple in ls_idx_pairs]
 
     dict = {
         "cs1": {"sequences": cs1, "prefixes": cs1_prefixes, "num_tasks": 4},
@@ -181,8 +195,8 @@ def get_task_settings(dbg_mode, dbg_learn_parameters, synthesizer=None):
 
 
 def mk_default_lib():
-    lib = FnLibrary()
-    lib.addItems(get_items_from_repo(['compose', 'repeat', 'map_l', 'fold_l', 'conv_l', 'zeros']))
+    lib = OpLibrary(['compose', 'repeat', 'map_l',
+                     'fold_l', 'conv_l', 'zeros'])
     return lib
 
 
@@ -191,7 +205,8 @@ def main(task_id, sequence_str, sequence_name, synthesizer):
         update_library=True,
         results_dir=settings["results_dir"],
     )
-    task_settings = get_task_settings(settings["dbg_mode"], settings["dbg_learn_parameters"], synthesizer=synthesizer)
+    task_settings = get_task_settings(
+        settings["dbg_mode"], settings["dbg_learn_parameters"], synthesizer=synthesizer)
     lib = mk_default_lib()
 
     seq_tasks_info = get_sequence_from_string(sequence_str)
@@ -227,7 +242,8 @@ if __name__ == '__main__':
 
     settings = {
         "results_dir": "Results",  # str(sys.argv[1])
-        "dbg_learn_parameters": True,  # If False, the interpreter doesn't learn the new parameters
+        # If False, the interpreter doesn't learn the new parameters
+        "dbg_learn_parameters": True,
         "dbg_mode": args.dbg,  # If True, the sequences run for a tiny amount of data
         "synthesizer": args.synthesizer,  # enumerative, evolutionary
         "seq_string": args.taskseq  # "ls"  # cs1, cs2, cs3, ls
@@ -236,8 +252,10 @@ if __name__ == '__main__':
     seq_info_dict = get_sequence_info(settings["seq_string"])
 
     # num_tasks = seq_info_dict["num_tasks"]
-    additional_prefix = "_np_{}".format("td" if settings["synthesizer"] == "enumerative" else "ea")
-    prefixes = ["{}{}".format(prefix, additional_prefix) for prefix in seq_info_dict["prefixes"]]
+    additional_prefix = "_np_{}".format(
+        "td" if settings["synthesizer"] == "enumerative" else "ea")
+    prefixes = ["{}{}".format(prefix, additional_prefix)
+                for prefix in seq_info_dict["prefixes"]]
 
     for sequence_idx, sequence in enumerate(seq_info_dict["sequences"]):
         for task_id in range(seq_info_dict["num_tasks"]):

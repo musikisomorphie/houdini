@@ -117,3 +117,4 @@ Results/*.npy
 .DS_Store
 Data/Mazes
 Data/GTSRB
+Data/smallnorb/*.mat.gz

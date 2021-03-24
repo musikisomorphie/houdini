@@ -1,14 +1,15 @@
 import torch.nn.functional as F
-from HOUDINI.Interpreter.NeuralModules import NetCNN
+from HOUDINI.Library.NN import NetCNN
 from HOUDINI.NeuralSynthesizer import NeuralSynthesizer
 
 from Data import split_into_train_and_validation, get_batch_count_iseven
 from HOUDINI.Interpreter.Interpreter import Interpreter
-from HOUDINI.FnLibraryFunctions import pp_map, pp_reduce, get_items_from_repo
-from HOUDINI.FnLibrary import FnLibrary, PPLibItem
+from HOUDINI.Library.Op import pp_map, pp_reduce
+from HOUDINI.Library.OpLibrary import OpLibrary
+from HOUDINI.Library.FnLibrary import FnLibrary, PPLibItem
 from HOUDINI.Synthesizer import ASTUtils
 from HOUDINI.Synthesizer.AST import *
-from HOUDINI.Synthesizer.ASTDSL import mkTensorSort, mkFuncSort, mkListSort, mkRealTensorSort, \
+from HOUDINI.Synthesizer.AST import mkTensorSort, mkFuncSort, mkListSort, mkRealTensorSort, \
     mkBoolTensorSort, mkIntTensorSort, mkGraphSort
 from HOUDINI.Synthesizer.ReprUtils import repr_py_ann, repr_py
 from HOUDINI.Synthesizer.SymbolicSynthesizer import SymbolicSynthesizer
@@ -19,7 +20,8 @@ def test1():
     boolSort = PPBool()
 
     libSynth = FnLibrary()
-    libSynth.addItems([PPLibItem('itob', mkFuncSort(intSort, boolSort), None), ])
+    libSynth.addItems(
+        [PPLibItem('itob', mkFuncSort(intSort, boolSort), None), ])
     ioExamples = None
 
     fnSort = PPFuncSort([intSort], boolSort)
@@ -36,7 +38,8 @@ def xtest2():
     intSort = PPInt()
     boolSort = PPBool()
     libSynth = FnLibrary()
-    libSynth.addItems([PPLibItem('itob', mkFuncSort(intSort, boolSort), None), ])
+    libSynth.addItems(
+        [PPLibItem('itob', mkFuncSort(intSort, boolSort), None), ])
     ioExamples = None
 
     fnSort = PPFuncSort([intSort], boolSort)
@@ -94,7 +97,8 @@ def xtest4():
 
 def test5():
     def mk_recognise_5s():
-        res = NetCNN("recognise_5s", input_ch=1, output_dim=1, output_activation=F.sigmoid)
+        res = NetCNN("recognise_5s", input_ch=1, output_dim=1,
+                     output_activation=torch.sigmoid)
         res.load('../Interpreter/Models/is5_classifier.pth.tar')
         return res
 
@@ -107,7 +111,8 @@ def test5():
     libSynth.addItems([
         PPLibItem('recognise_5s', mkFuncSort(mkTensorSort(PPReal(), ['a', 1, 28, 28]),
                                              mkTensorSort(PPReal(), ['a', 1])), mk_recognise_5s()),
-        PPLibItem('map', mkFuncSort(mkFuncSort(t1, t2), mkListSort(t1), mkListSort(t2)), pp_map),
+        PPLibItem('map', mkFuncSort(mkFuncSort(t1, t2),
+                                    mkListSort(t1), mkListSort(t2)), pp_map),
     ])
 
     ioExamples = None
@@ -123,7 +128,8 @@ def test5():
 
     """targetProg = lambda inputs: map(lib.recognise_5s, inputs)"""
 
-    solver = SymbolicSynthesizer(interpreter, libSynth, fnSort, ioExamples, ioExamples)
+    solver = SymbolicSynthesizer(
+        interpreter, libSynth, fnSort, ioExamples, ioExamples)
     solver.setEvaluate(False)
     # TODO: use "search" instead of "solve"
     solution, score = solver.solve()
@@ -137,7 +143,8 @@ def test6():
     t2 = PPSortVar('T2')
 
     def mk_recognise_5s():
-        res = NetCNN("recognise_5s", input_ch=1, output_dim=1, output_activation=F.sigmoid)
+        res = NetCNN("recognise_5s", input_ch=1, output_dim=1,
+                     output_activation=torch.sigmoid)
         res.load('../Interpreter/Models/is5_classifier.pth.tar')
         return res
 
@@ -147,13 +154,17 @@ def test6():
     libSynth.addItems([
         PPLibItem('recognise_5s', mkFuncSort(mkTensorSort(PPReal(), ['a', 1, 28, 28]),
                                              mkTensorSort(PPReal(), ['a', 1])), mk_recognise_5s()),
-        PPLibItem('map', mkFuncSort(mkFuncSort(t1, t2), mkListSort(t1), mkListSort(t2)), pp_map),
-        PPLibItem('reduce', mkFuncSort(mkFuncSort(t, t, t), mkListSort(t), t), pp_reduce),
-        PPLibItem('add', mkFuncSort(real_tensor_2d, real_tensor_2d, real_tensor_2d), lambda x, y: x + y),
+        PPLibItem('map', mkFuncSort(mkFuncSort(t1, t2),
+                                    mkListSort(t1), mkListSort(t2)), pp_map),
+        PPLibItem('reduce', mkFuncSort(mkFuncSort(
+            t, t, t), mkListSort(t), t), pp_reduce),
+        PPLibItem('add', mkFuncSort(real_tensor_2d, real_tensor_2d,
+                                    real_tensor_2d), lambda x, y: x + y),
     ])
 
     train, val = split_into_train_and_validation(0, 10)
-    val_ioExamples = get_batch_count_iseven(digits_to_count=[5], count_up_to=10, batch_size=20, digit_dictionary=val)
+    val_ioExamples = get_batch_count_iseven(
+        digits_to_count=[5], count_up_to=10, batch_size=20, digit_dictionary=val)
 
     img = mkRealTensorSort([1, 1, 28, 28])
     isFive = mkRealTensorSort([1, 1])
@@ -174,7 +185,8 @@ def test6():
                 map(lib.recognise_5s, inputs))
     """
     # TODO: use "search" instead of "solve"
-    solver = SymbolicSynthesizer(interpreter, libSynth, fnSort, val_ioExamples, val_ioExamples)
+    solver = SymbolicSynthesizer(
+        interpreter, libSynth, fnSort, val_ioExamples, val_ioExamples)
     # solver.setEvaluate(False)
     solution, score = solver.solve()
     print(solution)
@@ -186,10 +198,12 @@ def test_zeros():
     train, val = split_into_train_and_validation(0, 10)
     train_io_examples = get_batch_count_iseven(digits_to_count=[5], count_up_to=10, batch_size=100,
                                                digit_dictionary=train)
-    val_io_examples = get_batch_count_iseven(digits_to_count=[5], count_up_to=10, batch_size=20, digit_dictionary=val)
+    val_io_examples = get_batch_count_iseven(
+        digits_to_count=[5], count_up_to=10, batch_size=20, digit_dictionary=val)
 
     def mk_recognise_5s():
-        res = NetCNN("recognise_5s", input_ch=1, output_dim=1, output_activation=F.sigmoid)
+        res = NetCNN("recognise_5s", input_ch=1, output_dim=1,
+                     output_activation=torch.sigmoid)
         res.load('../Interpreter/Models/is5_classifier.pth.tar')
         return res
 
@@ -201,14 +215,16 @@ def test_zeros():
     t2 = PPSortVar('T2')
 
     libSynth.addItems([
-        PPLibItem('zeros', mkFuncSort(PPDimVar('a'), mkRealTensorSort([1, 'a'])), pp_map),
+        PPLibItem('zeros', mkFuncSort(PPDimVar('a'),
+                                      mkRealTensorSort([1, 'a'])), pp_map),
         # PPLibItem('zeros2', mkFuncSort(PPDimVar('a'), PPDimVar('b'), mkRealTensorSort(['a', 'b'])), pp_map),
     ])
 
     fnSort = mkFuncSort(PPDimConst(2), mkRealTensorSort([2]))
 
     interpreter = Interpreter(libSynth)
-    solver = SymbolicSynthesizer(interpreter, libSynth, fnSort, train_io_examples, val_io_examples)
+    solver = SymbolicSynthesizer(
+        interpreter, libSynth, fnSort, train_io_examples, val_io_examples)
     solver.setEvaluate(False)
     solution, score = solver.solve()
 
@@ -241,10 +257,12 @@ def getLib():
     libSynth.addItems([
         PPLibItem('map', func(func(A, B), func(lst(A), lst(B))), None),
         PPLibItem('fold', func(func(B, A, B), B, func(lst(A), B)), None),
-        PPLibItem('conv', func(func(A, lst(A), A), func(lst(A), lst(A))), None),
+        PPLibItem('conv', func(func(A, lst(A), A),
+                               func(lst(A), lst(A))), None),
         PPLibItem('compose', func(func(B, C), func(A, B), func(A, C)), None),
         PPLibItem('repeat', func(cnts, func(A, A), func(A, A)), None),
-        PPLibItem('zeros', func(PPDimVar('a'), mkRealTensorSort([1, 'a'])), None),
+        PPLibItem('zeros', func(PPDimVar('a'),
+                                mkRealTensorSort([1, 'a'])), None),
     ])
     return libSynth
 
@@ -339,12 +357,15 @@ def get_synth_lib():
         PPLibItem('map_l', func(func(A, B), func(lst(A), lst(B))), None),
         PPLibItem('fold_l', func(func(B, A, B), B, func(lst(A), B)), None),
         PPLibItem('conv_l', func(func(lst(A), B), func(lst(A), lst(B))), None),
-        PPLibItem('conv_g', func(func(lst(A), B), func(graph(A), graph(B))), None),
+        PPLibItem('conv_g', func(func(lst(A), B),
+                                 func(graph(A), graph(B))), None),
         PPLibItem('map_g', func(func(A, B), func(graph(A), graph(B))), None),
         PPLibItem('fold_g', func(func(B, A, B), B, func(graph(A), B)), None),
-        PPLibItem('zeros', func(PPDimVar('a'), mkRealTensorSort([1, 'a'])), None),
+        PPLibItem('zeros', func(PPDimVar('a'),
+                                mkRealTensorSort([1, 'a'])), None),
         PPLibItem('repeat', func(repeatEnum, func(A, A), func(A, A)), None),
-        PPLibItem('regress_speed_mnist', func(mkRealTensorSort([1, 3, 32, 32]), mkRealTensorSort([1, 2])), None),
+        PPLibItem('regress_speed_mnist', func(mkRealTensorSort(
+            [1, 3, 32, 32]), mkRealTensorSort([1, 2])), None),
 
         # PPLibItem('nav_mnist', func(mkGraphSort(mkRealTensorSort([1, 3, 32, 32])),
         #                             mkGraphSort(mkRealTensorSort([1, 2]))), None),
@@ -374,19 +395,16 @@ def test_synthesizer_graph():
             # print(i, repr_py_ann(prog))
             print(i, repr_py(prog))
 
-
             # compose.*repeat.*conv_g.*map_g
             # compose( repeat(N, convg(Z),  mapg(regress_speed))
 
 
 def getBaseLibrary():
-    libSynth = FnLibrary()
-
-    libSynth.addItems(get_items_from_repo(['compose',
-                                           'map_l', 'fold_l', 'conv_l',
-                                           'conv_g', 'map_g', 'fold_g',
-                                           'zeros', 'repeat'
-                                           ]))
+    libSynth = OpLibrary(['compose',
+                          'map_l', 'fold_l', 'conv_l',
+                          'conv_g', 'map_g', 'fold_g',
+                          'zeros', 'repeat'
+                          ])
     return libSynth
 
 

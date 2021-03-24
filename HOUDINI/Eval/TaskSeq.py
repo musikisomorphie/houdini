@@ -5,8 +5,10 @@ from typing import NamedTuple, List, Dict
 from HOUDINI.Eval.EvaluatorUtils import mk_tag, write_to_file, append_to_file
 # from HOUDINI.Eval.EvaluatorTask import Task, TaskResult, TaskResultSingle
 from HOUDINI.Eval.Task import Task, TaskResult, TaskResultSingle
-from HOUDINI.FnLibraryFunctions import loadLibrary1
-from HOUDINI.FnLibrary import FnLibrary, PPLibItem
+# from HOUDINI.Library.Op import loadLibrary
+from HOUDINI.Library.NN import NetCNN, SaveableNNModule
+from HOUDINI.Library.FnLibrary import FnLibrary, PPLibItem
+from HOUDINI.Library.OpLibrary import OpLibrary
 from HOUDINI.Synthesizer.Utils import ASTUtils
 from HOUDINI.Synthesizer.AST import PPSort
 from HOUDINI.Synthesizer.Utils.MiscUtils import createDir
@@ -55,19 +57,45 @@ class TaskSeq:
         with open(file_path, 'wb') as fh:
             pickle.dump(task_result, fh, protocol=pickle.HIGHEST_PROTOCOL)
 
+    def loadLibrary(self, libDirPath, taskid):
+        libFilePath = libDirPath + '/' + 'lib{}.pickle'.format(taskid-1)
+
+        # return None
+        if not os.path.isfile(libFilePath):
+            return None
+
+        with open(libFilePath, 'rb') as fh:
+            libDict = pickle.load(fh)
+
+        # lib = FnLibrary()
+        NNList, OpList = [], []
+        for name, (li, isNN) in libDict.items():
+            if isNN:
+                obj = SaveableNNModule.create_and_load(libDirPath, name)
+                NNList.append(PPLibItem(name, li, obj))
+            else:
+                OpList.append(name)
+
+        lib = OpLibrary(OpList)
+        for nn in NNList:
+            lib.addItem(nn)
+
+        return lib
+
     def update_library(self, lib: FnLibrary, task_result_single: TaskResultSingle, taskid):
         if self.seq_settings.update_library:
             # Add learned modules to the library
             top_solution = task_result_single.get_top_solution_details()
             if top_solution is not None:
                 prog, resDict = top_solution
-                unk_sort_map: Dict[str, PPSort] = ASTUtils.getUnkNameSortMap(prog)
+                unk_sort_map: Dict[str,
+                                   PPSort] = ASTUtils.getUnkNameSortMap(prog)
                 lib_items = [PPLibItem(unk, unk_sort, resDict['new_fns_dict'][unk]) for unk, unk_sort in
                              unk_sort_map.items()]
                 if lib_items.__len__() > 0:
                     lib.addItems(lib_items)
                 # Save the library.
-                lib.save1(self.getLibLocation(), taskid)
+                lib.save(self.getLibLocation(), taskid)
 
     """
     @staticmethod
@@ -91,7 +119,7 @@ class TaskSeq:
             os.remove(pickle_path)
             # raise Exception("Result file already exists: %s" % pickle_path)
 
-        lib = loadLibrary1(self.getLibLocation(), id) if id > 0 else None
+        lib = self.loadLibrary(self.getLibLocation(), id) if id > 0 else None
         if lib is not None:
             print("Library loaded")
             self.lib = lib
@@ -126,6 +154,7 @@ class TaskSeq:
         append_to_file(report_file_path, report)
 
     """"""
+
     def write_report(self, task_id):
         """write report upto task_id """
         seq_dir = self.get_seq_dir()
