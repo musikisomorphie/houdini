@@ -145,8 +145,7 @@ class InferSequence(TaskSeq):
                                           task_settings,
                                           self,
                                           dbg_learn_parameters))
-
-            if task_info.task_type == TaskType.Predict:
+            elif task_info.task_type == TaskType.Predict:
                 tasks.append(PredictTask(portec_dict,
                                          task_settings,
                                          self,

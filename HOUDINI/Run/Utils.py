@@ -1,5 +1,6 @@
 import numpy as np
 import pyreadstat
+import pickle
 from typing import List, Dict, Tuple
 from matplotlib import pyplot as plt
 from Data.DataGenerator import NumpyDataSetIterator
@@ -65,10 +66,15 @@ def get_portec_io_examples(portec_file,
     df_val, df_tst = df_trn, df_trn
     return df_trn, df_val, df_tst
 
-def get_lganm_io_examples(lganm_dict,
-                          exp_nm):
 
-    if not exp_nm in lganm_dict:
-        raise KeyError('{} is not a valid experiment name.'.format(exp_nm)) 
-    lexp = lganm_dict[exp_nm]
-    
+def get_lganm_io_examples(lganm_envs,
+                          parents,
+                          outcome):
+    dt = np.concatenate(lganm_envs, axis=0)
+    msk = np.ones(dt.shape[1], dtype=bool)
+    msk[outcome] = False
+    dt_trn = (dt[:, msk], dt[:, ~msk])
+    # print(msk, ~msk)
+    # print(dt_trn[0].shape, dt_trn[1].shape)
+    dt_val, dt_tst = dt_trn, dt_trn
+    return dt_trn, dt_val, dt_tst
