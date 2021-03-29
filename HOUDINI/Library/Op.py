@@ -101,6 +101,7 @@ def pp_conv_list(fn):
             return []
 
         if type(iterable[0]) != torch.autograd.Variable:
+            print(type(iterable[0]))
             raise NotHandledException
 
         # zero-pad start and end

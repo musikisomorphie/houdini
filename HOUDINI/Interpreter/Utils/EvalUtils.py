@@ -116,7 +116,7 @@ def is_evaluable(st, ns) -> Tuple[bool, int]:
             else:
                 return False, 51
 
-        return False, 52
+        # return False, 52
 
     lib_names = get_lib_names(st)
     # don't allow multiple repeats, as we could just keep on stacking these.

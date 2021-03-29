@@ -130,7 +130,7 @@ class NetMLP(SaveableNNModule):
         self.hidden_layer = hidden_layer
         # fc1_size = 300
         if self.hidden_layer:
-            fc1_size = 1024
+            fc1_size = 8
             self.fc1 = nn.Linear(input_dim, fc1_size)
             self.bn1 = nn.BatchNorm1d(fc1_size)
 
@@ -176,8 +176,8 @@ class NetMLP(SaveableNNModule):
         # FC Layer 1
         if self.hidden_layer:
             x = F.relu(self.fc1(x))
-            x = self.bn1(x)
-            x = F.dropout(x, training=self.training)
+            # x = self.bn1(x)
+            # x = F.dropout(x, training=self.training)
 
         # FC Layer 2
         if self.output_dim is not None:

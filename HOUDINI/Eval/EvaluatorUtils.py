@@ -103,7 +103,7 @@ def get_io_examples_recognize_digit(digit, train_size, val_size):
 
     test_io_examples = mnist_data_provider.get_batch_counting([digit], 1, val_size, mnist_test,
                                                              single_items=True, return_count_int=False)
-
+    print(train_io_examples[0].shape, train_io_examples[1].shape)
     return train_io_examples, val_io_examples, test_io_examples
 
 

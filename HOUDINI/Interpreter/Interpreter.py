@@ -114,8 +114,9 @@ class Interpreter:
                 # global_vars = {"lib": self.library, "inputs": x}
                 global_vars = {"lib": self.library}
                 global_vars = {**global_vars, **new_fns_dict}
-                y_pred = eval(program, global_vars)(x)
-                yield (y_pred, y)
+                y_pred = eval(program, global_vars)(x.float())
+                # print(len(y_pred), y_pred[0].shape, y_pred[1].shape)
+                yield (y_pred, y.float())
 
     def _get_accuracy(self, program, data_loader, output_type, new_fns_dict):
         c_num_matching_datapoints = 0

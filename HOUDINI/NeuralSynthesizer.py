@@ -156,9 +156,9 @@ class NeuralSynthesizer:
             try:
                 interpreter_res = self.interpret(
                     prog, unkSortMap, io_examples_tr, io_examples_val, io_examples_test)
-            except NotHandledException as e:
-                self.log_unhandled_program(prog)
-                continue
+            # except NotHandledException as e:
+            #     self.log_unhandled_program(prog)
+            #     continue
             except Exception as e:
                 e.args += _debug_info(prog, unkSortMap, self.lib, self.sort)
                 traceback.print_exc()
