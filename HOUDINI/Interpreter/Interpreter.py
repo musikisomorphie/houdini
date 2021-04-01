@@ -9,6 +9,7 @@ from typing import Dict
 import numpy as np
 
 from Data.DataProvider import NumpyDataSetIterator
+from HOUDINI.Library import Loss, Metric
 from HOUDINI.Library.NN import *
 from HOUDINI.Library.FnLibrary import FnLibrary
 from HOUDINI.Synthesizer.Utils import ReprUtils
@@ -22,7 +23,8 @@ from HOUDINI.Synthesizer.Utils.ASTUtils import deconstruct
 class ProgramOutputType(Enum):
     INTEGER = 1,  # using l2 regression, evaluating using round up/down
     SIGMOID = 2,
-    SOFTMAX = 3
+    SOFTMAX = 3,
+    HAZARD = 4
     # REAL = 2 # using l2 regression, no accuracy evaluated. Perhaps can use some epsilon, not implemented
 # ProgramRep = TypeVar('ProgramRep')
 
@@ -128,6 +130,7 @@ class Interpreter:
         else:
             num_datapoints = reduce(
                 lambda a, b: a + b.num_datapoints, data_loader, 0.)
+        y_pred_all, y_all = list(), list()
         # num_datapoints = data_loader.dataset.__len__() if type(data_loader) == DataLoader else data_loader[0].dataset.__len__()
         for y_pred, y in self._predict_data(program, data_loader, new_fns_dict):
 
@@ -168,6 +171,11 @@ class Interpreter:
                 y_int = y.data.cpu().numpy().round().astype(np.int)
                 c_num_matching_datapoints += (y_pred_int ==
                                               y_int).astype(np.float32).sum()
+            elif output_type == ProgramOutputType.HAZARD:
+                torch_mse = Loss.cox_ph_loss(y_pred_output, y)
+                mse += torch_mse
+                y_pred_all.append(y_pred_output)
+                y_all.append(y)
             else:
                 # y_pred_output_np = y_pred_output.data.cpu().numpy()
                 y_pred_int = y_pred_output.data.cpu().numpy().argmax(
@@ -176,13 +184,25 @@ class Interpreter:
                 c_num_matching_datapoints += (y_pred_int ==
                                               y_int).astype(np.float32).sum()
 
+            
+
         accuracy = c_num_matching_datapoints / float(num_datapoints)
         mse = mse / float(num_datapoints)
         rmse = math.sqrt(mse)
         # if type(mse) == Variable:
 
         # returning -rmse, so that we select the best performance.
-        return -rmse if output_type == ProgramOutputType.INTEGER else accuracy
+        if output_type in (ProgramOutputType.INTEGER, ProgramOutputType.HAZARD):
+            perform_metric = -rmse
+            if output_type == ProgramOutputType.HAZARD:
+                y_all_np = torch.cat(y_all, dim=0).cpu().detach().numpy()
+                y_pred_all_np = torch.cat(y_pred_all, dim=0).cpu().detach().numpy()
+                # print(y_all_np.shape, y_pred_all_np.shape)
+                cox_metric = Metric.coxph(y_pred_all_np, y_all_np)
+                cox_metric.eval_surv(y_pred_all_np, y_all_np)
+        else:
+            perform_metric = accuracy
+        return perform_metric
 
     def _clone_hidden_state(self, state):
         result = OrderedDict()
@@ -201,6 +221,8 @@ class Interpreter:
             criterion = torch.nn.MSELoss()
         elif output_type == ProgramOutputType.SIGMOID:
             criterion = torch.nn.BCEWithLogitsLoss()
+        elif output_type == ProgramOutputType.HAZARD:
+            criterion = Loss.cox_ph_loss
         else:
             # combines log_softmax and cross-entropy
             criterion = F.cross_entropy
@@ -402,7 +424,11 @@ class Interpreter:
         elif type(output_sort.param_sort) == PPBool:
             output_type = ProgramOutputType.SOFTMAX if label_max_value > 1. else ProgramOutputType.SIGMOID
         elif type(output_sort.param_sort) == PPReal:
-            output_type = ProgramOutputType.INTEGER
+            # if the label has two dim: RFS and RFSyears
+            if len(label_shape) == 2 and label_shape[1] == 2:
+                output_type = ProgramOutputType.HAZARD
+            else:
+                output_type = ProgramOutputType.INTEGER
         else:
             raise NotImplementedError
         return output_type

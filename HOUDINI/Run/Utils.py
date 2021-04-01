@@ -61,7 +61,7 @@ def get_portec_io_examples(portec_file,
     df, _ = pyreadstat.read_sav(str(portec_file))
     df = df.fillna(0)
     df_trn = (df[feat].values,
-              np.expand_dims(df[label].values, axis=-1))
+              df[label].values)
     print(df_trn[0].shape, df_trn[1].shape)
     df_val, df_tst = df_trn, df_trn
     return df_trn, df_val, df_tst

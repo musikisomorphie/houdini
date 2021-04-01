@@ -35,10 +35,10 @@ class ClassifyTask(Task):
                  dbg_learn_parameters):
 
         self.feat = portec_dict['clinical_meta']['causal']
-        self.label = portec_dict['clinical_meta']['outcome'][0]
+        self.label = portec_dict['clinical_meta']['outcome']
         self.file = portec_dict['file']
         input_type = mkRealTensorSort([1, len(self.feat)])
-        output_type = mkBoolTensorSort([1, 1])
+        output_type = mkRealTensorSort([1, 1])
         fn_sort = mkFuncSort(input_type, output_type)
 
         super().__init__(fn_sort,
@@ -203,10 +203,10 @@ def get_task_settings(dbg_mode,
             train_size=64,
             val_size=64,
             training_percentages=[100],
-            N=50,
+            N=200,
             M=2,
             K=2,
-            epochs=10,
+            epochs=1,
             synthesizer=synthesizer,
             dbg_learn_parameters=dbg_learn_parameters
         )
