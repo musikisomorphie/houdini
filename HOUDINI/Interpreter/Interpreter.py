@@ -1,15 +1,18 @@
 import random
 import sys
+import torch
+import numpy as np
+import pathlib
 from collections import OrderedDict
 from enum import Enum
 from functools import reduce
 # from torch.utils.data import DataLoader, TensorDataset
 from typing import Dict
 
-import numpy as np
-
 from Data.DataProvider import NumpyDataSetIterator
+from HOUDINI.Config import config
 from HOUDINI.Library import Loss, Metric
+from HOUDINI.Library.Utils import MetricUtils
 from HOUDINI.Library.NN import *
 from HOUDINI.Library.FnLibrary import FnLibrary
 from HOUDINI.Synthesizer.Utils import ReprUtils
@@ -35,7 +38,15 @@ class Interpreter:
     Also, even if there's no new module introduced in the program, we might want to fine-tune existing modules.
     """
 
-    def __init__(self, library: FnLibrary, batch_size=150, epochs=1, lr=0.001, evaluate_every_n_percent=1.):
+    def __init__(self,
+                 settings,
+                 library: FnLibrary,
+                 batch_size=150,
+                 epochs=1,
+                 lr=0.001,
+                 evaluate_every_n_percent=1.):
+        print(settings)
+        self.settings = settings
         self.library = library
         self.batch_size = batch_size
         self.epochs = epochs
@@ -184,8 +195,6 @@ class Interpreter:
                 c_num_matching_datapoints += (y_pred_int ==
                                               y_int).astype(np.float32).sum()
 
-            
-
         accuracy = c_num_matching_datapoints / float(num_datapoints)
         mse = mse / float(num_datapoints)
         rmse = math.sqrt(mse)
@@ -196,13 +205,33 @@ class Interpreter:
             perform_metric = -rmse
             if output_type == ProgramOutputType.HAZARD:
                 y_all_np = torch.cat(y_all, dim=0).cpu().detach().numpy()
-                y_pred_all_np = torch.cat(y_pred_all, dim=0).cpu().detach().numpy()
+                y_pred_all_np = torch.cat(
+                    y_pred_all, dim=0).cpu().detach().numpy()
                 # print(y_all_np.shape, y_pred_all_np.shape)
                 cox_metric = Metric.coxph(y_pred_all_np, y_all_np)
-                cox_metric.eval_surv(y_pred_all_np, y_all_np)
+                cox_scores = cox_metric.eval_surv(y_pred_all_np, y_all_np)
+
+                global_vars = {"lib": self.library}
+                global_vars = {**global_vars, **new_fns_dict}
+                g_in = torch.tensor(
+                    list(self.settings.data_dict['clinical_meta']['causal'].values()))
+                g_in = g_in.unsqueeze(dim=0).cuda()
+                g_in = torch.autograd.Variable(g_in,
+                                               requires_grad=True)
+                g_pred = eval(program, global_vars)(g_in)
+                # g_out = torch.ones(g_pred.shape)
+                cox_grads = torch.autograd.grad(outputs=g_pred,
+                                                inputs=g_in,
+                                                # grad_outputs=g_out,
+                                                create_graph=True,
+                                                retain_graph=True,
+                                                only_inputs=True)[0]
+                cox_grads = cox_grads.cpu().detach().numpy()
+                cox_grads = np.squeeze(cox_grads)
+                return perform_metric, cox_scores, cox_grads
         else:
             perform_metric = accuracy
-        return perform_metric
+        return perform_metric, np.inf, np.inf
 
     def _clone_hidden_state(self, state):
         result = OrderedDict()
@@ -210,8 +239,13 @@ class Interpreter:
             result[key] = val.clone()
         return result
 
-    def learn_neural_network_(self, program, output_type, new_fns_dict, trainable_parameters,
-                              data_loader_tr: NumpyDataSetIterator, data_loader_val: NumpyDataSetIterator,
+    def learn_neural_network_(self,
+                              program,
+                              output_type,
+                              new_fns_dict,
+                              trainable_parameters,
+                              data_loader_tr: NumpyDataSetIterator,
+                              data_loader_val: NumpyDataSetIterator,
                               data_loader_test: NumpyDataSetIterator):
         if trainable_parameters is not None and trainable_parameters.__len__() == 0:
             print(
@@ -297,10 +331,14 @@ class Interpreter:
                     # set all new functions to eval mode
                     for key, value in new_fns_dict.items():
                         value.eval()
-                    c_accuracy = self._get_accuracy(
-                        program, data_loader_val, output_type, new_fns_dict)
-                    c_accuracy_test = self._get_accuracy(
-                        program, data_loader_test, output_type, new_fns_dict)
+                    c_accuracy = self._get_accuracy(program,
+                                                    data_loader_val,
+                                                    output_type,
+                                                    new_fns_dict)[0]
+                    c_accuracy_test = self._get_accuracy(program,
+                                                         data_loader_test,
+                                                         output_type,
+                                                         new_fns_dict)[0]
 
                     accuracies_val.append(c_accuracy)
                     accuracies_test.append(c_accuracy_test)
@@ -338,16 +376,31 @@ class Interpreter:
 
         return new_fns_dict, max_accuracy, evaluations_np
 
-    def _learn_neural_network(self, program, output_type, unknown_fns,
-                              data_loader_tr: NumpyDataSetIterator, data_loader_val: NumpyDataSetIterator,
+    def _learn_neural_network(self,
+                              program,
+                              output_type,
+                              unknown_fns,
+                              data_loader_tr: NumpyDataSetIterator,
+                              data_loader_val: NumpyDataSetIterator,
                               data_loader_test: NumpyDataSetIterator):
         # ***************** Set up the model *****************
         new_fns_dict, trainable_parameters = self.create_nns(unknown_fns)
-        return self.learn_neural_network_(program, output_type, new_fns_dict, trainable_parameters, data_loader_tr, data_loader_val,
+        return self.learn_neural_network_(program,
+                                          output_type,
+                                          new_fns_dict,
+                                          trainable_parameters,
+                                          data_loader_tr,
+                                          data_loader_val,
                                           data_loader_test=data_loader_test)
 
-    def evaluate_(self, program: str, output_type: ProgramOutputType, unknown_fns_def: List[Dict] = None,
-                  io_examples_tr=None, io_examples_val=None, io_examples_test=None, dbg_learn_parameters=True):
+    def evaluate_(self,
+                  program: str,
+                  output_type: ProgramOutputType,
+                  unknown_fns_def: List[Dict] = None,
+                  io_examples_tr=None,
+                  io_examples_val=None,
+                  io_examples_test=None,
+                  dbg_learn_parameters=True):
         """
         Independent from the synthesizer
         :param program:
@@ -367,18 +420,50 @@ class Interpreter:
         assert(type(output_type) == ProgramOutputType)
 
         new_fns_dict = {}
+        val_accuracy, test_accuracy = list(), list()
+        cox_scores, cox_grads = list(), list()
+        for _ in range(2):
+            evaluations_np = np.ones((1, 1))
+            if unknown_fns_def is not None and unknown_fns_def.__len__() > 0:
+                if not dbg_learn_parameters:
+                    new_fns_dict, _ = self.create_nns(unknown_fns_def)
+                else:
+                    new_fns_dict, val_acc, evaluations_np = self._learn_neural_network(program,
+                                                                                       output_type,
+                                                                                       unknown_fns_def,
+                                                                                       data_loader_tr,
+                                                                                       data_loader_val,
+                                                                                       data_loader_test)
+            val_acc = self._get_accuracy(program,
+                                         data_loader_val,
+                                         output_type,
+                                         new_fns_dict)
 
-        evaluations_np = np.ones((1, 1))
-        if unknown_fns_def is not None and unknown_fns_def.__len__() > 0:
-            if not dbg_learn_parameters:
-                new_fns_dict, _ = self.create_nns(unknown_fns_def)
-            else:
-                new_fns_dict, val_accuracy, evaluations_np = self._learn_neural_network(program, output_type, unknown_fns_def,
-                                                                                        data_loader_tr, data_loader_val, data_loader_test)
-        val_accuracy = self._get_accuracy(
-            program, data_loader_val, output_type, new_fns_dict)
-        test_accuracy = self._get_accuracy(
-            program, data_loader_test, output_type, new_fns_dict)
+            test_acc = self._get_accuracy(program,
+                                          data_loader_test,
+                                          output_type,
+                                          new_fns_dict)
+            val_accuracy.append(val_acc[0])
+            test_accuracy.append(test_acc[0])
+            if output_type == ProgramOutputType.HAZARD:
+                cox_scores.append(val_acc[1])
+                cox_grads.append(val_acc[2])
+
+        val_accuracy = sum(val_accuracy) / len(val_accuracy)
+        test_accuracy = sum(test_accuracy) / len(test_accuracy)
+        if output_type == ProgramOutputType.HAZARD:
+            cox_scores = list(zip(*cox_scores))
+            cox_grads = np.asarray(cox_grads)
+            cox_index = list(range(cox_grads.shape[1]))
+            cox_index = list(
+                self.settings.data_dict['clinical_meta']['causal'].keys())
+            cox_dir = self.settings.data_dict['res_dir']
+            # print(cox_index, cox_grads.shape)
+            cox_utils = MetricUtils.coxsum(cox_index, cox_grads)
+            cox_utils.vis_plot(cox_scores,
+                               pathlib.Path(cox_dir),
+                               self.settings.data_dict['metric_scores'])
+            print(cox_utils.summary(pathlib.Path(cox_dir)))
         print("validation accuracy=", val_accuracy)
         print("test accuracy=", test_accuracy)
         return {"accuracy": val_accuracy, "new_fns_dict": new_fns_dict,

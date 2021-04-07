@@ -142,7 +142,8 @@ def get_sequence_info(seq_string):
     return seq_dict[seq_string]
 
 
-def get_task_settings(dbg_mode,
+def get_task_settings(data_dict,
+                      dbg_mode,
                       dbg_learn_parameters,
                       synthesizer=None):
     '''
@@ -160,7 +161,8 @@ def get_task_settings(dbg_mode,
             K=50,
             epochs=30,
             synthesizer=synthesizer,
-            dbg_learn_parameters=dbg_learn_parameters
+            dbg_learn_parameters=dbg_learn_parameters,
+            data_dict=data_dict
         )
     else:
         task_settings = TaskSettings(
@@ -172,7 +174,8 @@ def get_task_settings(dbg_mode,
             K=2,
             epochs=10,
             synthesizer=synthesizer,
-            dbg_learn_parameters=dbg_learn_parameters
+            dbg_learn_parameters=dbg_learn_parameters,
+            data_dict=data_dict
         )
     return task_settings
 
@@ -192,7 +195,8 @@ def main(lganm_dict,
     seq_settings = TaskSeqSettings(update_library=True,
                                    results_dir=settings['results_dir'])
 
-    task_settings = get_task_settings(settings['dbg_mode'],
+    task_settings = get_task_settings(lganm_dict,
+                                      settings['dbg_mode'],
                                       settings['dbg_learn_parameters'],
                                       synthesizer=synthesizer)
     lib = mk_default_lib()
@@ -264,6 +268,9 @@ if __name__ == '__main__':
 
     for sequence_idx, sequence in enumerate(seq_info_dict['sequences']):
         for task_id in range(seq_info_dict['num_tasks']):
+            lganm_dict['res_dir'] = Path(settings['results_dir']) / \
+                prefixes[sequence_idx]
+            lganm_dict['res_dir'].mkdir(parents=True, exist_ok=True)
             main(lganm_dict=lganm_dict,
                  task_id=task_id,
                  sequence_str=sequence,

@@ -130,15 +130,15 @@ class NetMLP(SaveableNNModule):
         self.hidden_layer = hidden_layer
         # fc1_size = 300
         if self.hidden_layer:
-            fc1_size = 8
+            fc1_size = input_dim
             self.fc1 = nn.Linear(input_dim, fc1_size)
             self.bn1 = nn.BatchNorm1d(fc1_size)
 
         if self.output_dim is not None:
             if self.hidden_layer:
-                self.fc2 = nn.Linear(fc1_size, output_dim)
+                self.fc2 = nn.Linear(fc1_size, output_dim, bias=False)
             else:
-                self.fc2 = nn.Linear(input_dim, output_dim)
+                self.fc2 = nn.Linear(input_dim, output_dim, bias=False)
 
     def forward(self, x, x1=None):
         if type(x) == tuple:

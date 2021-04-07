@@ -29,14 +29,15 @@ class Dataset(Enum):
 
 class ClassifyTask(Task):
     def __init__(self,
-                 portec_dict_dict,
+                 portec_dict,
                  settings,
                  seq,
                  dbg_learn_parameters):
-
-        self.feat = portec_dict['clinical_meta']['causal']
-        self.label = portec_dict['clinical_meta']['outcome']
+        
         self.file = portec_dict['file']
+        self.feat = list(portec_dict['clinical_meta']['causal'].keys())
+        self.label = portec_dict['clinical_meta']['outcome']
+        self.flter = list(portec_dict['clinical_meta']['filter'].keys())
         input_type = mkRealTensorSort([1, len(self.feat)])
         output_type = mkRealTensorSort([1, 1])
         fn_sort = mkFuncSort(input_type, output_type)
@@ -49,7 +50,8 @@ class ClassifyTask(Task):
     def get_io_examples(self):
         return get_portec_io_examples(self.file,
                                       self.feat,
-                                      self.label)
+                                      self.label,
+                                      self.flter[0])
 
     def name(self):
         return 'classify_RFS'
@@ -178,7 +180,8 @@ def get_sequence_info(seq_string):
     return seq_dict[seq_string]
 
 
-def get_task_settings(dbg_mode,
+def get_task_settings(data_dict,
+                      dbg_mode,
                       dbg_learn_parameters,
                       synthesizer=None):
     '''
@@ -196,19 +199,21 @@ def get_task_settings(dbg_mode,
             K=50,
             epochs=30,
             synthesizer=synthesizer,
-            dbg_learn_parameters=dbg_learn_parameters
+            dbg_learn_parameters=dbg_learn_parameters,
+            data_dict=data_dict
         )
     else:
         task_settings = TaskSettings(
-            train_size=64,
-            val_size=64,
+            train_size=128,
+            val_size=128,
             training_percentages=[100],
             N=200,
             M=2,
             K=2,
-            epochs=1,
+            epochs=16,
             synthesizer=synthesizer,
-            dbg_learn_parameters=dbg_learn_parameters
+            dbg_learn_parameters=dbg_learn_parameters,
+            data_dict=data_dict
         )
     return task_settings
 
@@ -228,7 +233,8 @@ def main(portec_dict,
     seq_settings = TaskSeqSettings(update_library=True,
                                    results_dir=settings['results_dir'])
 
-    task_settings = get_task_settings(settings['dbg_mode'],
+    task_settings = get_task_settings(portec_dict,
+                                      settings['dbg_mode'],
                                       settings['dbg_learn_parameters'],
                                       synthesizer=synthesizer)
     lib = mk_default_lib()
@@ -274,10 +280,6 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
 
-    portec_dict = config('HOUDINI/Yaml/PORTEC.yaml')
-    portec_dict = portec_dict['PORTEC']
-    portec_dict.update({'file': args.dt_file})
-
     settings = {
         'results_dir': 'Results',  # str(sys.argv[1])
         # If False, the interpreter doesn't learn the new parameters
@@ -286,6 +288,10 @@ if __name__ == '__main__':
         'synthesizer': args.synthesizer,  # enumerative, evolutionary
         'seq_string': args.taskseq  # 'ls'  # cs1, cs2, cs3, ls
     }
+
+    portec_dict = config('HOUDINI/Yaml/PORTEC.yaml')
+    portec_dict = portec_dict['Immune']
+    portec_dict.update({'file': args.dt_file})
 
     seq_info_dict = get_sequence_info(settings['seq_string'])
 
@@ -297,6 +303,9 @@ if __name__ == '__main__':
 
     for sequence_idx, sequence in enumerate(seq_info_dict['sequences']):
         for task_id in range(seq_info_dict['num_tasks']):
+            portec_dict['res_dir'] = Path(settings['results_dir']) / \
+                prefixes[sequence_idx]
+            portec_dict['res_dir'].mkdir(parents=True, exist_ok=True)
             main(portec_dict=portec_dict,
                  task_id=task_id,
                  sequence_str=sequence,

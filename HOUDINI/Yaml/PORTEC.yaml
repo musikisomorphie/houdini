@@ -1,12 +1,19 @@
 # the PORTEC data parameters
-PORTEC:
+Immune:
     patient:
         pat_total: 1142
         pat_split: [438, 497] # 80% train, 10% val, 10% test
         pat_perm: 1
     clinical_meta:
+        filter:
+            Included_CIR2020: 1
         # exlcude causal variables that are not numerical
         causal:
+            Grade_2Cat: 0
+            MyometrialInvasion: 0
+            LVSI_2Cat: 0
+            L1CAM_2var: 0
+            log2_av_tot_cd8t: -3.321928095
             # - Age
             # - ReceivedTx
             # - HistoEndometrioid
@@ -17,22 +24,22 @@ PORTEC:
             # - L1CAM_2var
             # - CTNNB1
             # - TCGA_4groups
-            - log2_av_tot_cd103v
-            - log2_av_tot_cd8v
-            - log2_av_sgl_cd103v
-            - log2_av_sgl_cd8v
-            - log2_av_dblv
-            - log2_av_tot_cd103s
-            - log2_av_tot_cd8s
-            - log2_av_sgl_cd103s
-            - log2_av_sgl_cd8s
-            - log2_av_dbls
-            - log2_av_tot_cd103t
-            - log2_av_tot_cd8t
-            - log2_av_sgl_cd103t
-            - log2_av_sgl_cd8t
-            - log2_av_dblt
-            - Cluster
+            # - log2_av_tot_cd103v
+            # - log2_av_tot_cd8v
+            # - log2_av_sgl_cd103v
+            # - log2_av_sgl_cd8v
+            # - log2_av_dblv
+            # - log2_av_tot_cd103s
+            # - log2_av_tot_cd8s
+            # - log2_av_sgl_cd103s
+            # - log2_av_sgl_cd8s
+            # - log2_av_dbls
+            # - log2_av_tot_cd103t
+            # - log2_av_tot_cd8t
+            # - log2_av_sgl_cd103t
+            # - log2_av_sgl_cd8t
+            # - log2_av_dblt
+            # - Cluster
         outcome:
             - RFSstatus
             - RFSYears
@@ -57,3 +64,7 @@ PORTEC:
             val: 8
             test: 8 
         wei_thres: 0.5
+    metric_scores:
+        - Concord_Index
+        - Brier_Score
+        - Binomial_Log-Likelihood

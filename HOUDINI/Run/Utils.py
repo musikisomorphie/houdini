@@ -1,6 +1,7 @@
 import numpy as np
 import pyreadstat
 import pickle
+from pathlib import Path
 from typing import List, Dict, Tuple
 from matplotlib import pyplot as plt
 from Data.DataGenerator import NumpyDataSetIterator
@@ -57,9 +58,16 @@ def iterate_diff_training_sizes(train_io_examples, training_data_percentages):
 
 def get_portec_io_examples(portec_file,
                            feat,
-                           label):
+                           label,
+                           fltr=None):
     df, _ = pyreadstat.read_sav(str(portec_file))
-    df = df.fillna(0)
+    if fltr is None:
+        df = df.fillna(0)
+    else:
+        df = df.loc[df[fltr] == 1]
+        df = df.dropna(subset=feat)
+        df = df.dropna(subset=label)
+        # # df = df.fillna(0)
     df_trn = (df[feat].values,
               df[label].values)
     print(df_trn[0].shape, df_trn[1].shape)
@@ -78,3 +86,19 @@ def get_lganm_io_examples(lganm_envs,
     # print(dt_trn[0].shape, dt_trn[1].shape)
     dt_val, dt_tst = dt_trn, dt_trn
     return dt_trn, dt_val, dt_tst
+
+
+def sav_to_csv(sav_file,
+               csv_file):
+    df, _ = pyreadstat.read_sav(str(sav_file))
+    df.to_csv(str(csv_file))
+
+
+def main():
+    sav_file = Path('/home/histopath/Data/PORTEC/PORTEC12-1-2-21.sav')
+    csv_file = sav_file.with_suffix('.csv')
+    sav_to_csv(sav_file, csv_file)
+
+
+if __name__ == '__main__':
+    main()

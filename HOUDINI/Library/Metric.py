@@ -13,13 +13,15 @@ class coxph():
                  pred,
                  target,
                  max_duration=None,
-                 sample=None):
-
+                 sample=None,
+                 alpha=0.05):
         self.duration_col = 'duration'
         self.event_col = 'event'
         # self.input = input
         self.pred = pred
         self.target = target
+        # alpha for null hypothesis
+        self.alpha = alpha
 
         haz = self._compute_baseline_hazards(max_duration,
                                              sample)
@@ -71,6 +73,9 @@ class coxph():
                     .iloc[::-1]
                     .loc[lambda x: x.index <= max_duration]
                     .rename('baseline_hazards'))
+
+        assert base_haz.index.is_monotonic_increasing,\
+            'The index should be monotonic increasing, as it represents time.'
 
         base_cum_haz = (base_haz
                         .cumsum()
@@ -136,5 +141,4 @@ class coxph():
         _ = ev.brier_score(time_grid).plot()
         brier = ev.integrated_brier_score(time_grid)
         nbll = ev.integrated_nbll(time_grid)
-        print(concord, brier, nbll)
-        return
+        return concord, brier, nbll

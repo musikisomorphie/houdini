@@ -160,7 +160,8 @@ _TaskSettings = NamedTuple('TaskSettings', [
     ('epochs', int),
     ('synthesizer', str),  # 'enumerative'| 'evolutionary',
     ('batch_size', int),
-    ('dbg_learn_parameters', bool)  # If False, it won't learn new parameters
+    ('dbg_learn_parameters', bool),  # If False, it won't learn new parameters
+    ('data_dict', dict)
 ])
 
 
@@ -189,8 +190,10 @@ class Task:
 
     def _mkNSynth(self):
         ea_synthesis_mode = self.settings.synthesizer == 'evolutionary'
-        interpreter = Interpreter(
-            self.seq.lib, epochs=self.settings.epochs, batch_size=self.settings.batch_size)
+        interpreter = Interpreter(self.settings,
+                                  self.seq.lib, 
+                                  epochs=self.settings.epochs, 
+                                  batch_size=self.settings.batch_size)
         nnprefix = self.seq.sname() + self.sname()
 
         if self.settings.synthesizer == 'enumerative':
