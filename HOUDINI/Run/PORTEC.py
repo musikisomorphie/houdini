@@ -210,7 +210,7 @@ def get_task_settings(data_dict,
             N=200,
             M=2,
             K=2,
-            epochs=16,
+            epochs=6,
             synthesizer=synthesizer,
             dbg_learn_parameters=dbg_learn_parameters,
             data_dict=data_dict
@@ -272,6 +272,10 @@ def parse_args():
                         default='/mnt/sda1/Data/PORTEC/PORTEC.sav',
                         metavar='DIR',
                         help='path to the visualization folder')
+    parser.add_argument('--repeat',
+                        type=int,
+                        default=2,
+                        help='num of repeated experiments')
     args = parser.parse_args()
 
     return args
@@ -290,8 +294,12 @@ if __name__ == '__main__':
     }
 
     portec_dict = config('HOUDINI/Yaml/PORTEC.yaml')
-    portec_dict = portec_dict['Immune']
+    if 'prep' in args.dt_file.stem: 
+        portec_dict = portec_dict['ImmunePrep']
+    else:
+        portec_dict = portec_dict['ImmuneOrg']
     portec_dict.update({'file': args.dt_file})
+    portec_dict.update({'repeat': args.repeat})
 
     seq_info_dict = get_sequence_info(settings['seq_string'])
 

@@ -157,6 +157,7 @@ class NetMLP(SaveableNNModule):
 
             if dim0_x == 1 and dim0 > 1:
                 dim1_x = x.shape[1]
+                # dim1_x = 128
                 new = torch.ones((dim0, dim1_x))
                 new = Variable(new).cuda(
                 ) if torch.cuda.is_available() else Variable(new)

@@ -43,7 +43,7 @@ class Interpreter:
                  library: FnLibrary,
                  batch_size=150,
                  epochs=1,
-                 lr=0.001,
+                 lr=0.02,
                  evaluate_every_n_percent=1.):
         print(settings)
         self.settings = settings
@@ -215,7 +215,7 @@ class Interpreter:
                 global_vars = {**global_vars, **new_fns_dict}
                 g_in = torch.tensor(
                     list(self.settings.data_dict['clinical_meta']['causal'].values()))
-                g_in = g_in.unsqueeze(dim=0).cuda()
+                g_in = g_in.unsqueeze(dim=0).float().cuda()
                 g_in = torch.autograd.Variable(g_in,
                                                requires_grad=True)
                 g_pred = eval(program, global_vars)(g_in)
@@ -231,7 +231,7 @@ class Interpreter:
                 return perform_metric, cox_scores, cox_grads
         else:
             perform_metric = accuracy
-        return perform_metric, np.inf, np.inf
+        return perform_metric
 
     def _clone_hidden_state(self, state):
         result = OrderedDict()
@@ -261,7 +261,7 @@ class Interpreter:
             # combines log_softmax and cross-entropy
             criterion = F.cross_entropy
 
-        optimizer = torch.optim.Adam(trainable_parameters, lr=self.lr)
+        optimizer = torch.optim.Adam(trainable_parameters, lr=self.lr, weight_decay=0.001)
 
         # data_loader_tr is either a dataloader or a list of dataloaders
         if issubclass(type(data_loader_tr), NumpyDataSetIterator):
@@ -422,7 +422,8 @@ class Interpreter:
         new_fns_dict = {}
         val_accuracy, test_accuracy = list(), list()
         cox_scores, cox_grads = list(), list()
-        for _ in range(2):
+        repeat = self.settings.data_dict['repeat']
+        for _ in range(repeat):
             evaluations_np = np.ones((1, 1))
             if unknown_fns_def is not None and unknown_fns_def.__len__() > 0:
                 if not dbg_learn_parameters:

@@ -237,6 +237,10 @@ def parse_args():
                         choices=['fin', 'int_srt', 'abcd'],
                         default='fin',
                         help='Experimental settings defined in AICP. (default: %(default)s)')
+    parser.add_argument('--repeat',
+                        type=int,
+                        default=2,
+                        help='num of repeated experiments')
     args = parser.parse_args()
 
     return args
@@ -265,6 +269,7 @@ if __name__ == '__main__':
     pkl_file = args.lganm_dir / args.exp / 'n_100' / '{}.pickle'.format(0)
     with open(str(pkl_file), 'rb') as pl:
         lganm_dict = pickle.load(pl)
+        lganm_dict.update({'repeat': args.repeat})
 
     for sequence_idx, sequence in enumerate(seq_info_dict['sequences']):
         for task_id in range(seq_info_dict['num_tasks']):

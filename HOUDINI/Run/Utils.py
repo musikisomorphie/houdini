@@ -94,10 +94,39 @@ def sav_to_csv(sav_file,
     df.to_csv(str(csv_file))
 
 
+def prep_sav(sav_file):
+    df, meta = pyreadstat.read_sav(str(sav_file))
+    df['POLE'] = df['TCGA_4groups']
+    df.loc[df['POLE'] == 1, 'POLE'] = 1
+    df.loc[df['POLE'] == 2, 'POLE'] = 0
+    df.loc[df['POLE'] == 3, 'POLE'] = 0
+    df.loc[df['POLE'] == 4, 'POLE'] = 0
+    
+    df['MMRd'] = df['TCGA_4groups']
+    df.loc[df['MMRd'] == 1, 'MMRd'] = 0
+    df.loc[df['MMRd'] == 2, 'MMRd'] = 1
+    df.loc[df['MMRd'] == 3, 'MMRd'] = 0
+    df.loc[df['MMRd'] == 4, 'MMRd'] = 0
+
+    df['p53_mutant'] = df['TCGA_4groups']
+    df.loc[df['p53_mutant'] == 1, 'p53_mutant'] = 0
+    df.loc[df['p53_mutant'] == 2, 'p53_mutant'] = 0
+    df.loc[df['p53_mutant'] == 3, 'p53_mutant'] = 1
+    df.loc[df['p53_mutant'] == 4, 'p53_mutant'] = 0
+
+    new_sav = sav_file.parents[0] / (sav_file.stem + '_prep.sav')
+    print(new_sav)
+    pyreadstat.write_sav(df, str(new_sav))
+    new_csv = sav_file.parents[0] / (sav_file.stem + '_prep.csv')
+    print(new_csv)
+    df.to_csv(str(new_csv))
+
+
 def main():
     sav_file = Path('/home/histopath/Data/PORTEC/PORTEC12-1-2-21.sav')
-    csv_file = sav_file.with_suffix('.csv')
-    sav_to_csv(sav_file, csv_file)
+    # csv_file = sav_file.with_suffix('.csv')
+    # sav_to_csv(sav_file, csv_file)
+    prep_sav(sav_file)
 
 
 if __name__ == '__main__':
