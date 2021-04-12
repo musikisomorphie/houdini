@@ -19,21 +19,20 @@ SequenceTaskInfo = namedtuple(
 
 
 class TaskType(Enum):
-    Classify = 1
-    Predict = 2
+    Surv = 1
 
 
 class Dataset(Enum):
     PORTEC = 1
 
 
-class ClassifyTask(Task):
+class SurvTask(Task):
     def __init__(self,
                  portec_dict,
                  settings,
                  seq,
                  dbg_learn_parameters):
-        
+
         self.file = portec_dict['file']
         self.feat = list(portec_dict['clinical_meta']['causal'].keys())
         self.label = portec_dict['clinical_meta']['outcome']
@@ -54,48 +53,17 @@ class ClassifyTask(Task):
                                       self.flter[0])
 
     def name(self):
-        return 'classify_RFS'
+        return 'surv_RFS'
 
     def sname(self):
-        return 'cr'
-
-
-class PredictTask(Task):
-    def __init__(self,
-                 portec_dict,
-                 settings,
-                 seq,
-                 dbg_learn_parameters):
-
-        self.feat = portec_dict['clinical_meta']['causal']
-        self.label = portec_dict['clinical_meta']['outcome'][1]
-        self.file = portec_dict['file']
-        input_type = mkRealTensorSort([1, len(self.feat)])
-        output_type = mkRealTensorSort([1, 1])
-        fn_sort = mkFuncSort(input_type, output_type)
-
-        super().__init__(fn_sort,
-                         settings,
-                         seq,
-                         dbg_learn_parameters)
-
-    def get_io_examples(self):
-        return get_portec_io_examples(self.file,
-                                      self.feat,
-                                      self.label)
-
-    def name(self):
-        return 'predict_RFS'
-
-    def sname(self):
-        return 'pr'
+        return 'surv'
 
 
 def get_task_name(task_info):
-    if task_info.task_type == TaskType.Classify:
-        c_str = 'clas'
+    if task_info.task_type == TaskType.Surv:
+        c_str = 'surv'
     else:
-        c_str = 'pred'
+        raise NotImplementedError()
 
     c_str += 'P'
     c_str += str(task_info.index)
@@ -117,10 +85,10 @@ def get_sequence_from_string(sequence_str):
     sequence = []
     str_list = sequence_str.split(', ')
     for c_str in str_list:
-        if c_str[:4] == 'clas':
-            c_task_type = TaskType.Classify
+        if c_str[:4] == 'surv':
+            c_task_type = TaskType.Surv
         else:
-            c_task_type = TaskType.Predict
+            raise NotImplementedError()
 
         c_dataset = Dataset.PORTEC
 
@@ -142,16 +110,13 @@ class InferSequence(TaskSeq):
         self._name = name
         tasks = []
         for _, task_info in enumerate(list_task_info):
-            if task_info.task_type == TaskType.Classify:
-                tasks.append(ClassifyTask(portec_dict,
-                                          task_settings,
-                                          self,
-                                          dbg_learn_parameters))
-            elif task_info.task_type == TaskType.Predict:
-                tasks.append(PredictTask(portec_dict,
-                                         task_settings,
-                                         self,
-                                         dbg_learn_parameters))
+            if task_info.task_type == TaskType.Surv:
+                tasks.append(SurvTask(portec_dict,
+                                      task_settings,
+                                      self,
+                                      dbg_learn_parameters))
+            else:
+                raise NotImplementedError()
 
         super().__init__(tasks,
                          seq_settings,
@@ -165,15 +130,9 @@ class InferSequence(TaskSeq):
 
 
 def get_sequence_info(seq_string):
-    seq_dict = {'clas': {'sequences': ['clasP'],
-                         'prefixes': ['clas'],
-                         'num_tasks': 1},
-                'pred': {'sequences': ['predP'],
-                         'prefixes': ['pred'],
-                         'num_tasks': 1},
-                'clpd': {'sequences': ['clasP', 'predP'],
-                         'prefixes': ['clpd_cl', 'clpd_pd'],
-                         'num_tasks': 2}}
+    seq_dict = {'surv': {'sequences': ['survP'],
+                         'prefixes': ['surv'],
+                         'num_tasks': 1}}
 
     if not seq_string in seq_dict.keys():
         raise NameError('the seq {} are not valid'.format(seq_string))
@@ -193,6 +152,7 @@ def get_task_settings(data_dict,
         task_settings = TaskSettings(
             train_size=128,
             val_size=128,
+            batch_size=128,
             training_percentages=[2, 10, 20, 50, 100],
             N=10000,
             M=50,
@@ -200,12 +160,13 @@ def get_task_settings(data_dict,
             epochs=30,
             synthesizer=synthesizer,
             dbg_learn_parameters=dbg_learn_parameters,
-            data_dict=data_dict
-        )
+            learning_rate=0.02,
+            data_dict=data_dict)
     else:
         task_settings = TaskSettings(
             train_size=128,
             val_size=128,
+            batch_size=128,
             training_percentages=[100],
             N=200,
             M=2,
@@ -213,8 +174,8 @@ def get_task_settings(data_dict,
             epochs=6,
             synthesizer=synthesizer,
             dbg_learn_parameters=dbg_learn_parameters,
-            data_dict=data_dict
-        )
+            learning_rate=0.02,
+            data_dict=data_dict)
     return task_settings
 
 
@@ -259,14 +220,9 @@ def parse_args():
                         choices=['enumerative', 'evolutionary'],
                         default='enumerative',
                         help='Synthesizer type. (default: %(default)s)')
-    parser.add_argument('--taskseq',
-                        choices=['clas', 'pred', 'cspd'],
-                        required=True,
-                        help='Task Sequence')
     parser.add_argument('--dbg',
                         action='store_true',
-                        help='If set, the sequences run for a tiny amount of data'
-                        )
+                        help='If set, the sequences run for a tiny amount of data')
     parser.add_argument('--dt-file',
                         type=Path,
                         default='/mnt/sda1/Data/PORTEC/PORTEC.sav',
@@ -274,7 +230,7 @@ def parse_args():
                         help='path to the visualization folder')
     parser.add_argument('--repeat',
                         type=int,
-                        default=2,
+                        default=32,
                         help='num of repeated experiments')
     args = parser.parse_args()
 
@@ -282,24 +238,26 @@ def parse_args():
 
 
 if __name__ == '__main__':
+    # python -m HOUDINI.Run.PORTEC --dt-file /home/histopath/Data/PORTEC/PORTEC12-1-2-21_prep.sav --dbg
     args = parse_args()
 
-    settings = {
-        'results_dir': 'Results',  # str(sys.argv[1])
-        # If False, the interpreter doesn't learn the new parameters
-        'dbg_learn_parameters': True,
-        'dbg_mode': args.dbg,  # If True, the sequences run for a tiny amount of data
-        'synthesizer': args.synthesizer,  # enumerative, evolutionary
-        'seq_string': args.taskseq  # 'ls'  # cs1, cs2, cs3, ls
-    }
+    settings = {'results_dir': 'Results',  # str(sys.argv[1])
+                # If False, the interpreter doesn't learn the new parameters
+                'dbg_learn_parameters': True,
+                'dbg_mode': args.dbg,  # If True, the sequences run for a tiny amount of data
+                'synthesizer': args.synthesizer,  # enumerative, evolutionary
+                'seq_string': 'surv'}
 
     portec_dict = config('HOUDINI/Yaml/PORTEC.yaml')
-    if 'prep' in args.dt_file.stem: 
+    if 'prep' in args.dt_file.stem:
         portec_dict = portec_dict['ImmunePrep']
     else:
         portec_dict = portec_dict['ImmuneOrg']
+    portec_dict.update({'dict_name': 'portec'})
     portec_dict.update({'file': args.dt_file})
     portec_dict.update({'repeat': args.repeat})
+    portec_dict.update({'mid_size': 
+                        len(portec_dict['clinical_meta']['causal'].keys())})
 
     seq_info_dict = get_sequence_info(settings['seq_string'])
 

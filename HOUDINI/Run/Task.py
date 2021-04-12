@@ -161,6 +161,7 @@ _TaskSettings = NamedTuple('TaskSettings', [
     ('synthesizer', str),  # 'enumerative'| 'evolutionary',
     ('batch_size', int),
     ('dbg_learn_parameters', bool),  # If False, it won't learn new parameters
+    ('learning_rate', float),
     ('data_dict', dict)
 ])
 
@@ -191,15 +192,18 @@ class Task:
     def _mkNSynth(self):
         ea_synthesis_mode = self.settings.synthesizer == 'evolutionary'
         interpreter = Interpreter(self.settings,
-                                  self.seq.lib, 
-                                  epochs=self.settings.epochs, 
-                                  batch_size=self.settings.batch_size)
+                                  self.seq.lib)
+        #   epochs=self.settings.epochs,
+        #   batch_size=self.settings.batch_size,
+        #   lr=self.settings.learning_rate)
         nnprefix = self.seq.sname() + self.sname()
-
+        mid_size = self.settings.data_dict['mid_size']
         if self.settings.synthesizer == 'enumerative':
             # concrete_types = [mkRealTensorSort([1, 64, 4, 4]), mkRealTensorSort([1, 50])]
-            concreteTypes = [mkRealTensorSort([1, 64, 4, 4]), mkBoolTensorSort([
-                1, 1]), mkRealTensorSort([1, 50])]
+            # concreteTypes = [mkRealTensorSort([1, 64, 4, 4]), mkBoolTensorSort([
+            #     1, 1]), mkRealTensorSort([1, 50])]
+            concreteTypes = [mkRealTensorSort([mid_size, mid_size]),
+                             mkRealTensorSort([1, mid_size])]
             synth = SymbolicSynthesizer(
                 self.seq.lib, self.fn_sort, nnprefix, concreteTypes)
 
@@ -210,8 +214,10 @@ class Task:
                                        self.fn_sort, self.settings.dbg_learn_parameters, ns_settings)
             return nsynth
         elif self.settings.synthesizer == 'evolutionary':
-            concreteTypes = [mkRealTensorSort([1, 64, 4, 4]), mkBoolTensorSort([
-                1, 1]), mkRealTensorSort([1, 50])]
+            # concreteTypes = [mkRealTensorSort([1, 64, 4, 4]), mkBoolTensorSort([
+            #     1, 1]), mkRealTensorSort([1, 50])]
+            concreteTypes = [mkRealTensorSort([mid_size, mid_size]),
+                             mkRealTensorSort([1, mid_size])]
             synth = SymbolicSynthesizerEA(
                 self.seq.lib, self.fn_sort, nnprefix, concreteTypes)
 

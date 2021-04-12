@@ -81,6 +81,7 @@ def get_lganm_io_examples(lganm_envs,
     dt = np.concatenate(lganm_envs, axis=0)
     msk = np.ones(dt.shape[1], dtype=bool)
     msk[outcome] = False
+    print(msk)
     dt_trn = (dt[:, msk], dt[:, ~msk])
     # print(msk, ~msk)
     # print(dt_trn[0].shape, dt_trn[1].shape)

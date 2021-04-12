@@ -94,7 +94,7 @@ class coxsum():
             # 3 digits after decimal
             df.update(df.iloc[:, ].apply(
                 lambda x: (x * 1e2).astype(int) / 1e2))
-                
+
         doc = pl.Document()
         doc.packages.append(pl.Package('adjustbox'))
         with doc.create(pl.Section('Table')) as Table:

@@ -1,26 +1,25 @@
-import random
 import sys
-import torch
-import numpy as np
+import math
+import random
 import pathlib
-from collections import OrderedDict
+import numpy as np
 from enum import Enum
 from functools import reduce
-# from torch.utils.data import DataLoader, TensorDataset
-from typing import Dict
+from collections import OrderedDict
+from typing import NamedTuple, Union, List, Dict
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.autograd import Variable
 
 from Data.DataProvider import NumpyDataSetIterator
 from HOUDINI.Config import config
 from HOUDINI.Library import Loss, Metric
 from HOUDINI.Library.Utils import MetricUtils
-from HOUDINI.Library.NN import *
-from HOUDINI.Library.FnLibrary import FnLibrary
+from HOUDINI.Synthesizer import AST
 from HOUDINI.Synthesizer.Utils import ReprUtils
-from HOUDINI.Synthesizer.AST import *
-from HOUDINI.Synthesizer.Utils.ASTUtils import deconstruct
-
-
-# from HOUDINI.Data.DataProvider_old import *
+from HOUDINI.Library import NN
+from HOUDINI.Library.FnLibrary import FnLibrary
 
 
 class ProgramOutputType(Enum):
@@ -41,18 +40,20 @@ class Interpreter:
     def __init__(self,
                  settings,
                  library: FnLibrary,
-                 batch_size=150,
-                 epochs=1,
-                 lr=0.02,
                  evaluate_every_n_percent=1.):
+        #  batch_size=150,
+        #  epochs=1,
+        #  lr=0.02,
+        #  evaluate_every_n_percent=1.):
         print(settings)
-        self.settings = settings
+        # self.settings = settings
         self.library = library
-        self.batch_size = batch_size
-        self.epochs = epochs
+        self.data_dict = settings.data_dict
+        self.batch_size = settings.batch_size
+        self.epochs = settings.epochs
+        self.lr = settings.learning_rate
         # epochs is changed according to data size, but this stays the same
-        self.original_num_epochs = epochs
-        self.lr = lr
+        self.original_num_epochs = self.epochs
         self.evaluate_every_n_percent = evaluate_every_n_percent
 
     @classmethod
@@ -65,7 +66,7 @@ class Interpreter:
         new_fns_dict = {}
         for uf in unknown_fns:
             new_fns_dict[uf["name"]
-                         ], c_trainable_params = get_nn_from_params_dict(uf)
+                         ], c_trainable_params = NN.get_nn_from_params_dict(uf)
             if "freeze" in uf and uf["freeze"]:
                 print("freezing the weight of {}".format(uf["name"]))
                 continue
@@ -129,11 +130,18 @@ class Interpreter:
                 global_vars = {**global_vars, **new_fns_dict}
                 y_pred = eval(program, global_vars)(x.float())
                 # print(len(y_pred), y_pred[0].shape, y_pred[1].shape)
-                yield (y_pred, y.float())
+                yield (y_pred, y.float(), x.float())
 
-    def _get_accuracy(self, program, data_loader, output_type, new_fns_dict):
+    def _get_accuracy(self,
+                      program,
+                      data_loader,
+                      output_type,
+                      new_fns_dict,
+                      compute_grad=False):
         c_num_matching_datapoints = 0
         mse = 0  # atm, only accumulated, if the output is a real number
+        global_vars = {"lib": self.library}
+        global_vars = {**global_vars, **new_fns_dict}
 
         # data_loader_tr is either a dataloader or a list of dataloaders
         if issubclass(type(data_loader), NumpyDataSetIterator):
@@ -141,9 +149,9 @@ class Interpreter:
         else:
             num_datapoints = reduce(
                 lambda a, b: a + b.num_datapoints, data_loader, 0.)
-        y_pred_all, y_all = list(), list()
+        y_pred_all, y_all, grad_all = list(), list(), list()
         # num_datapoints = data_loader.dataset.__len__() if type(data_loader) == DataLoader else data_loader[0].dataset.__len__()
-        for y_pred, y in self._predict_data(program, data_loader, new_fns_dict):
+        for y_pred, y, x_in in self._predict_data(program, data_loader, new_fns_dict):
 
             # if x is a 2d list, convert it to a variable
             graph = y_pred
@@ -195,6 +203,44 @@ class Interpreter:
                 c_num_matching_datapoints += (y_pred_int ==
                                               y_int).astype(np.float32).sum()
 
+            # print(x_in.shape)
+            if compute_grad:
+                x_in = torch.autograd.Variable(x_in.clone(),
+                                               requires_grad=True)
+                x_pred = eval(program, global_vars)(x_in)
+                if type(y_pred) == tuple:
+                    x_pred = x_pred[1]
+                grad_outputs = torch.ones(x_pred.shape)
+                if torch.cuda.is_available():
+                    grad_outputs = grad_outputs.cuda()
+                x_grads = torch.autograd.grad(outputs=x_pred,
+                                              inputs=x_in,
+                                              grad_outputs=grad_outputs,
+                                              create_graph=True,
+                                              retain_graph=True,
+                                              only_inputs=True)[0]
+                x_grads = x_grads.detach().clone()
+                x_grads_norm = x_grads.norm(dim=0)
+                grad_all.append(x_grads_norm.detach().clone().cpu().numpy())
+                # print(x_grads.shape)
+        if compute_grad:
+            grad_all = np.asarray(grad_all)
+            grad_mean = np.mean(grad_all, axis=0)
+            outcome = self.data_dict['target']
+            parents = set(self.data_dict['truth'])
+            # number of all variables: causal var candidates + outcomet
+            par_cand = list(range(grad_mean.shape[0] + 1))
+            del par_cand[outcome]
+
+            grad_idx = np.argsort(-grad_mean)
+            grad_idx = grad_idx[:len(parents)]
+            cand_set = set(np.array(par_cand)[grad_idx])
+            jacob = len(parents.intersection(cand_set)) / len(parents.union(cand_set))
+            print(grad_mean, grad_idx, cand_set, outcome, parents, jacob)
+
+
+            # print(grad_mean)
+
         accuracy = c_num_matching_datapoints / float(num_datapoints)
         mse = mse / float(num_datapoints)
         rmse = math.sqrt(mse)
@@ -211,10 +257,8 @@ class Interpreter:
                 cox_metric = Metric.coxph(y_pred_all_np, y_all_np)
                 cox_scores = cox_metric.eval_surv(y_pred_all_np, y_all_np)
 
-                global_vars = {"lib": self.library}
-                global_vars = {**global_vars, **new_fns_dict}
                 g_in = torch.tensor(
-                    list(self.settings.data_dict['clinical_meta']['causal'].values()))
+                    list(self.data_dict['clinical_meta']['causal'].values()))
                 g_in = g_in.unsqueeze(dim=0).float().cuda()
                 g_in = torch.autograd.Variable(g_in,
                                                requires_grad=True)
@@ -231,7 +275,7 @@ class Interpreter:
                 return perform_metric, cox_scores, cox_grads
         else:
             perform_metric = accuracy
-        return perform_metric
+        return perform_metric, np.inf, np.inf
 
     def _clone_hidden_state(self, state):
         result = OrderedDict()
@@ -261,7 +305,8 @@ class Interpreter:
             # combines log_softmax and cross-entropy
             criterion = F.cross_entropy
 
-        optimizer = torch.optim.Adam(trainable_parameters, lr=self.lr, weight_decay=0.001)
+        optimizer = torch.optim.Adam(
+            trainable_parameters, lr=self.lr, weight_decay=0.001)
 
         # data_loader_tr is either a dataloader or a list of dataloaders
         if issubclass(type(data_loader_tr), NumpyDataSetIterator):
@@ -295,7 +340,8 @@ class Interpreter:
         for epoch in range(self.epochs):
             print("Starting epoch ", epoch, " / ", self.epochs)
 
-            for y_pred, y in self._predict_data(program, data_loader_tr, new_fns_dict):
+            for y_pred, y, x_in in self._predict_data(program, data_loader_tr, new_fns_dict):
+                # print(x_in.shape)
                 # if x is a 2d list, convert it to a variable
                 if type(y_pred) == list:
                     # check if it's a list of tuples
@@ -351,7 +397,7 @@ class Interpreter:
                             max_accuracy_new_fns_states[new_fn_name] = self._clone_hidden_state(
                                 new_fn.state_dict())
 
-                    print("c_accuracy", c_accuracy)
+                    # print("c_accuracy", c_accuracy)
 
                     # set all new functions to train mode
                     for key, value in new_fns_dict.items():
@@ -422,7 +468,8 @@ class Interpreter:
         new_fns_dict = {}
         val_accuracy, test_accuracy = list(), list()
         cox_scores, cox_grads = list(), list()
-        repeat = self.settings.data_dict['repeat']
+        repeat = self.data_dict['repeat']
+        is_lganm = self.data_dict['dict_name'].lower() == 'lganm'
         for _ in range(repeat):
             evaluations_np = np.ones((1, 1))
             if unknown_fns_def is not None and unknown_fns_def.__len__() > 0:
@@ -438,7 +485,8 @@ class Interpreter:
             val_acc = self._get_accuracy(program,
                                          data_loader_val,
                                          output_type,
-                                         new_fns_dict)
+                                         new_fns_dict,
+                                         compute_grad=is_lganm)
 
             test_acc = self._get_accuracy(program,
                                           data_loader_test,
@@ -456,14 +504,13 @@ class Interpreter:
             cox_scores = list(zip(*cox_scores))
             cox_grads = np.asarray(cox_grads)
             cox_index = list(range(cox_grads.shape[1]))
-            cox_index = list(
-                self.settings.data_dict['clinical_meta']['causal'].keys())
-            cox_dir = self.settings.data_dict['res_dir']
+            cox_index = list(self.data_dict['clinical_meta']['causal'].keys())
+            cox_dir = self.data_dict['res_dir']
             # print(cox_index, cox_grads.shape)
             cox_utils = MetricUtils.coxsum(cox_index, cox_grads)
             cox_utils.vis_plot(cox_scores,
                                pathlib.Path(cox_dir),
-                               self.settings.data_dict['metric_scores'])
+                               self.data_dict['metric_scores'])
             print(cox_utils.summary(pathlib.Path(cox_dir)))
         print("validation accuracy=", val_accuracy)
         print("test accuracy=", test_accuracy)
@@ -474,7 +521,7 @@ class Interpreter:
     def evaluate(self, program, output_type_s, unkSortMap=None,
                  io_examples_tr=None, io_examples_val=None, io_examples_test=None, dbg_learn_parameters=True) -> dict:
 
-        is_graph = type(output_type_s) == PPGraphSort
+        is_graph = type(output_type_s) == AST.PPGraphSort
 
         program_str = ReprUtils.repr_py(program)
         output_type = self.get_program_output_type(
@@ -505,11 +552,11 @@ class Interpreter:
         # dim = 1, Real => Regression
         # dim = 1, Int => Classification
         # dim = 1, Real, [0, 1] => 1d Classification
-        if type(output_sort) == PPGraphSort:
+        if type(output_sort) == AST.PPGraphSort:
             output_type = ProgramOutputType.INTEGER
-        elif type(output_sort.param_sort) == PPBool:
+        elif type(output_sort.param_sort) == AST.PPBool:
             output_type = ProgramOutputType.SOFTMAX if label_max_value > 1. else ProgramOutputType.SIGMOID
-        elif type(output_sort.param_sort) == PPReal:
+        elif type(output_sort.param_sort) == AST.PPReal:
             # if the label has two dim: RFS and RFSyears
             if len(label_shape) == 2 and label_shape[1] == 2:
                 output_type = ProgramOutputType.HAZARD
@@ -532,23 +579,24 @@ def _get_unknown_fns_definitions(unkSortMap, is_graph=False):
         output_type = fn_output_sort.param_sort
         if is_graph:
             output_activation = None
-        elif type(fn_output_sort) == PPTensorSort and fn_output_sort.shape.__len__() == 2:
-            print(fn_output_sort)
+        elif type(fn_output_sort) == AST.PPTensorSort and fn_output_sort.shape.__len__() == 2:
 
-            if type(output_type) == PPReal or type(output_type) == PPInt:
+            if type(output_type) == AST.PPReal or type(output_type) == AST.PPInt:
                 output_activation = None
-            elif type(output_type) == PPBool and output_dim == 1:
+            elif type(output_type) == AST.PPBool and output_dim == 1:
                 output_activation = torch.sigmoid
-            elif type(output_type) == PPBool and output_dim > 1:
+            elif type(output_type) == AST.PPBool and output_dim > 1:
                 output_activation = nn.Softmax(dim=1)
             else:
                 raise NotImplementedError()
+
+            print(fn_output_sort, type(output_type))
         # the only other possibility
-        elif not (type(fn_output_sort) == PPTensorSort and fn_output_sort.shape.__len__() == 4):
+        elif not (type(fn_output_sort) == AST.PPTensorSort and fn_output_sort.shape.__len__() == 4):
             raise NotImplementedError()
 
         fn_input_sort = unk_fn.args[0]
-        if type(fn_input_sort) == PPListSort:
+        if type(fn_input_sort) == AST.PPListSort:
             if is_graph:
                 input_dim = fn_input_sort.param_sort.shape[1].value
                 uf = {"type": "GCONVNew", "name": unk_fn_name,
@@ -557,21 +605,21 @@ def _get_unknown_fns_definitions(unkSortMap, is_graph=False):
             else:
                 input_list_item_sort = fn_input_sort.param_sort
                 # make sure the items in the list are tensors
-                assert(type(input_list_item_sort) == PPTensorSort)
+                assert(type(input_list_item_sort) == AST.PPTensorSort)
                 input_dim = fn_input_sort.param_sort.shape[1].value
                 hidden_dim = 100
                 uf = {"type": "RNN", "name": unk_fn_name, "input_dim": input_dim, "hidden_dim": hidden_dim,
                       "output_dim": output_dim, "output_activation": output_activation}
                 unk_fns_interpreter_def_list.append(uf)
-        elif type(fn_input_sort) == PPTensorSort and fn_input_sort.shape.__len__() == 4:
-            if type(fn_output_sort) == PPTensorSort and fn_output_sort.shape.__len__() == 4:
+        elif type(fn_input_sort) == AST.PPTensorSort and fn_input_sort.shape.__len__() == 4:
+            if type(fn_output_sort) == AST.PPTensorSort and fn_output_sort.shape.__len__() == 4:
                 # it's a cnn
                 input_dim = fn_input_sort.shape[2].value
                 input_ch = fn_input_sort.shape[1].value
                 uf = {"type": "CNN", "name": unk_fn_name,
                       "input_dim": input_dim, "input_ch": input_ch}
                 unk_fns_interpreter_def_list.append(uf)
-            elif type(fn_output_sort) == PPTensorSort and fn_output_sort.shape.__len__() == 2:
+            elif type(fn_output_sort) == AST.PPTensorSort and fn_output_sort.shape.__len__() == 2:
                 # FROM CNN's features to a vector using an MLP
                 input_dim = fn_input_sort.shape[1].value * \
                     fn_input_sort.shape[2].value * fn_input_sort.shape[3].value
@@ -581,7 +629,7 @@ def _get_unknown_fns_definitions(unkSortMap, is_graph=False):
             else:
                 raise NotImplementedError()
 
-        elif type(fn_input_sort) == PPTensorSort and fn_input_sort.shape.__len__() == 2:
+        elif type(fn_input_sort) == AST.PPTensorSort and fn_input_sort.shape.__len__() == 2:
             input_dim = fn_input_sort.shape[1].value
             if unk_fn.args.__len__() == 2:
                 fn_input2_sort = unk_fn.args[1]

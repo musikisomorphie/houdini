@@ -132,7 +132,7 @@ def is_evaluable(st, ns) -> Tuple[bool, int]:
 
     # don't allow for multiple MLPs, as we can just keep on stacking them
     # (thus going into architecture search, which is out of scope)
-    if number_of_mlp_nns > 1:
+    if number_of_mlp_nns > 2:
         return False, 16
 
     return True, 0

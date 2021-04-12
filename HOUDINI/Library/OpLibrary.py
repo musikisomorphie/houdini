@@ -41,7 +41,7 @@ class OpLibrary(FnLibrary):
                                                         self.func(self.A,
                                                                   self.C)), Op.pp_compose))
         elif op == 'repeat':
-            self.addItem(PPLibItem('repeat', self.func(AST.PPEnumSort(9, 10),
+            self.addItem(PPLibItem('repeat', self.func(AST.PPEnumSort(1, 4),
                                                        self.func(self.A,
                                                                  self.A),
                                                        self.func(self.A,

@@ -25,7 +25,6 @@ SequenceTaskInfo = namedtuple(
 
 class TaskType(Enum):
     Identify = 1
-    Predict = 2
 
 
 class Dataset(Enum):
@@ -58,17 +57,17 @@ class IdentifyTask(Task):
                                      self.outcome)
 
     def name(self):
-        return 'classify_RFS'
+        return 'idef_Vars'
 
     def sname(self):
-        return 'cr'
+        return 'idef'
 
 
 def get_task_name(task_info):
     if task_info.task_type == TaskType.Identify:
-        c_str = 'idet'
+        c_str = 'idef'
     else:
-        c_str = 'pred'
+        raise NotImplementedError()
 
     c_str += 'L'
     c_str += str(task_info.index)
@@ -90,13 +89,13 @@ def get_sequence_from_string(sequence_str):
     sequence = []
     str_list = sequence_str.split(', ')
     for c_str in str_list:
-        if c_str[:4] == 'idet':
+        if c_str[:4] == 'idef':
             c_task_type = TaskType.Identify
         else:
-            c_task_type = TaskType.Predict
+            raise NotImplementedError()
 
         c_dataset = Dataset.LGANM
-
+        # print(c_str)
         sequence.append(SequenceTaskInfo(task_type=c_task_type,
                                          dataset=c_dataset))
 
@@ -133,8 +132,8 @@ class InferSequence(TaskSeq):
 
 
 def get_sequence_info(seq_string):
-    seq_dict = {'idet': {'sequences': ['idetL'],
-                         'prefixes': ['idet'],
+    seq_dict = {'idef': {'sequences': ['idefL'],
+                         'prefixes': ['idef'],
                          'num_tasks': 1}}
 
     if not seq_string in seq_dict.keys():
@@ -155,6 +154,7 @@ def get_task_settings(data_dict,
         task_settings = TaskSettings(
             train_size=128,
             val_size=128,
+            batch_size=128,
             training_percentages=[2, 10, 20, 50, 100],
             N=10000,
             M=50,
@@ -162,21 +162,22 @@ def get_task_settings(data_dict,
             epochs=30,
             synthesizer=synthesizer,
             dbg_learn_parameters=dbg_learn_parameters,
-            data_dict=data_dict
-        )
+            learning_rate=0.02,
+            data_dict=data_dict)
     else:
         task_settings = TaskSettings(
-            train_size=64,
-            val_size=64,
+            train_size=128,
+            val_size=128,
+            batch_size=128,
             training_percentages=[100],
-            N=50,
-            M=2,
-            K=2,
-            epochs=10,
+            N=1000,
+            M=8,
+            K=8,
+            epochs=1,
             synthesizer=synthesizer,
             dbg_learn_parameters=dbg_learn_parameters,
-            data_dict=data_dict
-        )
+            learning_rate=0.02,
+            data_dict=data_dict)
     return task_settings
 
 
@@ -221,10 +222,6 @@ def parse_args():
                         choices=['enumerative', 'evolutionary'],
                         default='enumerative',
                         help='Synthesizer type. (default: %(default)s)')
-    parser.add_argument('--taskseq',
-                        choices=['idet'],
-                        required=True,
-                        help='Task Sequence')
     parser.add_argument('--dbg',
                         action='store_true',
                         help='If set, the sequences run for a tiny amount of data')
@@ -239,7 +236,7 @@ def parse_args():
                         help='Experimental settings defined in AICP. (default: %(default)s)')
     parser.add_argument('--repeat',
                         type=int,
-                        default=2,
+                        default=1,
                         help='num of repeated experiments')
     args = parser.parse_args()
 
@@ -247,6 +244,7 @@ def parse_args():
 
 
 if __name__ == '__main__':
+    # python -m HOUDINI.Run.LGANM --dbg
     args = parse_args()
 
     settings = {
@@ -255,7 +253,7 @@ if __name__ == '__main__':
         'dbg_learn_parameters': True,
         'dbg_mode': args.dbg,  # If True, the sequences run for a tiny amount of data
         'synthesizer': args.synthesizer,  # enumerative, evolutionary
-        'seq_string': args.taskseq  # 'ls'  # cs1, cs2, cs3, ls
+        'seq_string': 'idef'  # 'ls'  # cs1, cs2, cs3, ls
     }
 
     seq_info_dict = get_sequence_info(settings['seq_string'])
@@ -266,10 +264,18 @@ if __name__ == '__main__':
     prefixes = ['{}{}'.format(prefix, additional_prefix)
                 for prefix in seq_info_dict['prefixes']]
 
-    pkl_file = args.lganm_dir / args.exp / 'n_100' / '{}.pickle'.format(0)
+    pkl_file = args.lganm_dir / args.exp / 'n_1000' / '{}.pickle'.format(241)
     with open(str(pkl_file), 'rb') as pl:
         lganm_dict = pickle.load(pl)
+        lganm_dict.update({'dict_name': 'lganm'})
         lganm_dict.update({'repeat': args.repeat})
+        lganm_dict.update({'mid_size': lganm_dict['envs'][0].shape[1] - 1 })
+        print(lganm_dict['case'].sem)
+        print(lganm_dict['case'].target)
+        print(lganm_dict['case'].truth)
+        for env_id, env in enumerate(lganm_dict['envs']):
+            print(env_id)
+            print(env.shape, np.mean(env, axis=0), np.var(env, axis=0))
 
     for sequence_idx, sequence in enumerate(seq_info_dict['sequences']):
         for task_id in range(seq_info_dict['num_tasks']):
