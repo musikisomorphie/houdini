@@ -37,7 +37,7 @@ class SurvTask(Task):
         self.feat = list(portec_dict['clinical_meta']['causal'].keys())
         self.label = portec_dict['clinical_meta']['outcome']
         self.flter = list(portec_dict['clinical_meta']['filter'].keys())
-        input_type = mkRealTensorSort([1, len(self.feat)])
+        input_type = mkListSort(mkRealTensorSort([1, len(self.feat)]))
         output_type = mkRealTensorSort([1, 1])
         fn_sort = mkFuncSort(input_type, output_type)
 
@@ -169,8 +169,8 @@ def get_task_settings(data_dict,
             batch_size=128,
             training_percentages=[100],
             N=200,
-            M=2,
-            K=2,
+            M=4,
+            K=4,
             epochs=6,
             synthesizer=synthesizer,
             dbg_learn_parameters=dbg_learn_parameters,
@@ -180,8 +180,8 @@ def get_task_settings(data_dict,
 
 
 def mk_default_lib():
-    lib = OpLibrary(['compose', 'repeat', 'map_l',
-                     'fold_l', 'conv_l', 'zeros'])
+    lib = OpLibrary(['compose', 'map',
+                     'repeat', 'cat'])
     return lib
 
 
@@ -230,7 +230,7 @@ def parse_args():
                         help='path to the visualization folder')
     parser.add_argument('--repeat',
                         type=int,
-                        default=32,
+                        default=16,
                         help='num of repeated experiments')
     args = parser.parse_args()
 
@@ -253,11 +253,19 @@ if __name__ == '__main__':
         portec_dict = portec_dict['ImmunePrep']
     else:
         portec_dict = portec_dict['ImmuneOrg']
-    portec_dict.update({'dict_name': 'portec'})
-    portec_dict.update({'file': args.dt_file})
-    portec_dict.update({'repeat': args.repeat})
-    portec_dict.update({'mid_size': 
-                        len(portec_dict['clinical_meta']['causal'].keys())})
+
+    portec_parm = {'dict_name': 'portec',
+                   'file': args.dt_file,
+                   'repeat': args.repeat,
+                   'mid_size': len(portec_dict['clinical_meta']['causal'].keys()),
+                   'out_type': 'hazard'}
+    portec_dict.update(portec_parm)
+
+    # portec_dict.update({'dict_name': 'portec'})
+    # portec_dict.update({'file': args.dt_file})
+    # portec_dict.update({'repeat': args.repeat})
+    # portec_dict.update({'mid_size':
+    #                     len(portec_dict['clinical_meta']['causal'].keys())})
 
     seq_info_dict = get_sequence_info(settings['seq_string'])
 

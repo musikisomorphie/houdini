@@ -183,9 +183,9 @@ class NetMLP(SaveableNNModule):
         # FC Layer 2
         if self.output_dim is not None:
             x_logits = self.fc2(x)
-            output = x_logits if self.output_activation is None else self.output_activation(
-                x_logits)
-            return x_logits, output
+            # output = x_logits if self.output_activation is None else self.output_activation(
+            #     x_logits)
+            return x_logits
         else:
             return x
 

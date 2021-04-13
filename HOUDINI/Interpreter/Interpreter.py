@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from Data.DataProvider import NumpyDataSetIterator
+from Data.DataGenerator import NumpyDataSetIterator, ListNumpyDataSetIterator
 from HOUDINI.Config import config
 from HOUDINI.Library import Loss, Metric
 from HOUDINI.Library.Utils import MetricUtils
@@ -119,8 +119,13 @@ class Interpreter:
                     dl_iters_list.remove(c_rndm_iterator)
             if data_sample is not None:
                 x, y = data_sample
+                # batch, env = y.shape[0], y.shape[1]
+                # y = np.reshape(y, (batch*env, -1))
                 x = torch.from_numpy(x)
                 y = torch.from_numpy(y)
+                # print(y.shape)
+                batch, env = y.shape[0], y.shape[1]
+                y = torch.reshape(y, (batch * env, -1))
                 x = Variable(
                     x).cuda() if torch.cuda.is_available() else Variable(x)
                 y = Variable(
@@ -208,8 +213,8 @@ class Interpreter:
                 x_in = torch.autograd.Variable(x_in.clone(),
                                                requires_grad=True)
                 x_pred = eval(program, global_vars)(x_in)
-                if type(y_pred) == tuple:
-                    x_pred = x_pred[1]
+                # if type(y_pred) == tuple:
+                #     x_pred = x_pred[1]
                 grad_outputs = torch.ones(x_pred.shape)
                 if torch.cuda.is_available():
                     grad_outputs = grad_outputs.cuda()
@@ -220,6 +225,7 @@ class Interpreter:
                                               retain_graph=True,
                                               only_inputs=True)[0]
                 x_grads = x_grads.detach().clone()
+                x_grads = torch.reshape(x_grads, (-1, x_grads.shape[-1]))
                 x_grads_norm = x_grads.norm(dim=0)
                 grad_all.append(x_grads_norm.detach().clone().cpu().numpy())
                 # print(x_grads.shape)
@@ -235,9 +241,9 @@ class Interpreter:
             grad_idx = np.argsort(-grad_mean)
             grad_idx = grad_idx[:len(parents)]
             cand_set = set(np.array(par_cand)[grad_idx])
-            jacob = len(parents.intersection(cand_set)) / len(parents.union(cand_set))
+            jacob = len(parents.intersection(cand_set)) / \
+                len(parents.union(cand_set))
             print(grad_mean, grad_idx, cand_set, outcome, parents, jacob)
-
 
             # print(grad_mean)
 
@@ -259,7 +265,7 @@ class Interpreter:
 
                 g_in = torch.tensor(
                     list(self.data_dict['clinical_meta']['causal'].values()))
-                g_in = g_in.unsqueeze(dim=0).float().cuda()
+                g_in = g_in.unsqueeze(dim=0).unsqueeze(dim=0).float().cuda()
                 g_in = torch.autograd.Variable(g_in,
                                                requires_grad=True)
                 g_pred = eval(program, global_vars)(g_in)
@@ -397,7 +403,7 @@ class Interpreter:
                             max_accuracy_new_fns_states[new_fn_name] = self._clone_hidden_state(
                                 new_fn.state_dict())
 
-                    # print("c_accuracy", c_accuracy)
+                    print("c_accuracy", c_accuracy)
 
                     # set all new functions to train mode
                     for key, value in new_fns_dict.items():
@@ -535,35 +541,44 @@ class Interpreter:
         return res
 
     def get_program_output_type(self, io_examples_val, output_sort):
-        if issubclass(type(io_examples_val), NumpyDataSetIterator):
-            val_labels = io_examples_val.targets
-            label_max_value = val_labels.max()
-            label_min_value = val_labels.min()
-        elif type(io_examples_val) == tuple:
-            label_shape = io_examples_val[1].shape
-            label_max_value = io_examples_val[1].max()
-            label_min_value = io_examples_val[1].min()
-        else:
-            label_shape = io_examples_val[0][1].shape
-            label_max_value = io_examples_val[0][1].max()
-            label_min_value = io_examples_val[0][1].min()
-
-        # deduce output by the target examples
-        # dim = 1, Real => Regression
-        # dim = 1, Int => Classification
-        # dim = 1, Real, [0, 1] => 1d Classification
-        if type(output_sort) == AST.PPGraphSort:
+        if self.data_dict['out_type'] == 'hazard':
+            output_type = ProgramOutputType.HAZARD
+        elif self.data_dict['out_type'] == 'integer':
             output_type = ProgramOutputType.INTEGER
-        elif type(output_sort.param_sort) == AST.PPBool:
-            output_type = ProgramOutputType.SOFTMAX if label_max_value > 1. else ProgramOutputType.SIGMOID
-        elif type(output_sort.param_sort) == AST.PPReal:
-            # if the label has two dim: RFS and RFSyears
-            if len(label_shape) == 2 and label_shape[1] == 2:
-                output_type = ProgramOutputType.HAZARD
-            else:
-                output_type = ProgramOutputType.INTEGER
         else:
-            raise NotImplementedError
+            raise TypeError('invalid output type {}'.format(self.data_dict['out_type']))
+
+        # if issubclass(type(io_examples_val), NumpyDataSetIterator):
+        #     val_labels = io_examples_val.targets
+        #     label_shape = val_labels.shape
+        #     label_max_value = val_labels.max()
+        #     label_min_value = val_labels.min()
+        # elif type(io_examples_val) == tuple:
+        #     label_shape = io_examples_val[1].shape
+        #     label_max_value = io_examples_val[1].max()
+        #     label_min_value = io_examples_val[1].min()
+        # else:
+        #     label_shape = io_examples_val[0][1].shape
+        #     label_max_value = io_examples_val[0][1].max()
+        #     label_min_value = io_examples_val[0][1].min()
+
+        # # print('label shape', label_shape)
+        # # deduce output by the target examples
+        # # dim = 1, Real => Regression
+        # # dim = 1, Int => Classification
+        # # dim = 1, Real, [0, 1] => 1d Classification
+        # if type(output_sort) == AST.PPGraphSort:
+        #     output_type = ProgramOutputType.INTEGER
+        # elif type(output_sort.param_sort) == AST.PPBool:
+        #     output_type = ProgramOutputType.SOFTMAX if label_max_value > 1. else ProgramOutputType.SIGMOID
+        # elif type(output_sort.param_sort) == AST.PPReal:
+        #     # if the label has two dim: RFS and RFSyears
+        #     if len(label_shape) == 3 and label_shape[-1] == 2:
+        #         output_type = ProgramOutputType.HAZARD
+        #     else:
+        #         output_type = ProgramOutputType.INTEGER
+        # else:
+        #     raise TypeError('invalid output type {}'.format(type(output_sort)))
         return output_type
 
 
@@ -603,14 +618,17 @@ def _get_unknown_fns_definitions(unkSortMap, is_graph=False):
                       "input_dim": input_dim}
                 unk_fns_interpreter_def_list.append(uf)
             else:
-                input_list_item_sort = fn_input_sort.param_sort
-                # make sure the items in the list are tensors
-                assert(type(input_list_item_sort) == AST.PPTensorSort)
-                input_dim = fn_input_sort.param_sort.shape[1].value
-                hidden_dim = 100
-                uf = {"type": "RNN", "name": unk_fn_name, "input_dim": input_dim, "hidden_dim": hidden_dim,
-                      "output_dim": output_dim, "output_activation": output_activation}
-                unk_fns_interpreter_def_list.append(uf)
+                raise NotImplementedError()
+                # input_list_item_sort = fn_input_sort.param_sort
+                # # make sure the items in the list are tensors
+                # assert(type(input_list_item_sort) == AST.PPTensorSort)
+                # input_dim = fn_input_sort.param_sort.shape[1].value
+                # hidden_dim = 100
+                # # uf = {"type": "RNN", "name": unk_fn_name, "input_dim": input_dim, "hidden_dim": hidden_dim,
+                # #       "output_dim": output_dim, "output_activation": output_activation}
+                # uf = {"type": "MLP", "name": unk_fn_name, "input_dim": input_dim,
+                #       "output_dim": output_dim, "output_activation": output_activation}
+                # unk_fns_interpreter_def_list.append(uf)
         elif type(fn_input_sort) == AST.PPTensorSort and fn_input_sort.shape.__len__() == 4:
             if type(fn_output_sort) == AST.PPTensorSort and fn_output_sort.shape.__len__() == 4:
                 # it's a cnn

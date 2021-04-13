@@ -202,8 +202,7 @@ class Task:
             # concrete_types = [mkRealTensorSort([1, 64, 4, 4]), mkRealTensorSort([1, 50])]
             # concreteTypes = [mkRealTensorSort([1, 64, 4, 4]), mkBoolTensorSort([
             #     1, 1]), mkRealTensorSort([1, 50])]
-            concreteTypes = [mkRealTensorSort([mid_size, mid_size]),
-                             mkRealTensorSort([1, mid_size])]
+            concreteTypes = [mkRealTensorSort([1, mid_size])]
             synth = SymbolicSynthesizer(
                 self.seq.lib, self.fn_sort, nnprefix, concreteTypes)
 
@@ -217,7 +216,7 @@ class Task:
             # concreteTypes = [mkRealTensorSort([1, 64, 4, 4]), mkBoolTensorSort([
             #     1, 1]), mkRealTensorSort([1, 50])]
             concreteTypes = [mkRealTensorSort([mid_size, mid_size]),
-                             mkRealTensorSort([1, mid_size])]
+                             mkRealTensorSort([1, mid_size]), mkRealTensorSort([1, 1])]
             synth = SymbolicSynthesizerEA(
                 self.seq.lib, self.fn_sort, nnprefix, concreteTypes)
 

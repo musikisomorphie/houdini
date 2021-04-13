@@ -40,10 +40,14 @@ class IdentifyTask(Task):
         self.parents = lganm_dict['truth']
         self.outcome = lganm_dict['target']
         self.envs = lganm_dict['envs']
+        self.trn_batch = settings.train_size
+        self.val_batch = settings.val_size
+        self.tst_batch = self.val_batch
 
-        input_dim = self.envs[0].shape[1] - 1
-        input_type = mkRealTensorSort([1, input_dim])
+        self.dt_dim = self.envs[0].shape[1]
+        input_type = mkListSort(mkRealTensorSort([1, self.dt_dim - 1]))
         output_type = mkRealTensorSort([1, 1])
+        # output_type = mkListSort(mkRealTensorSort([1, 1]))
         fn_sort = mkFuncSort(input_type, output_type)
 
         super().__init__(fn_sort,
@@ -54,7 +58,11 @@ class IdentifyTask(Task):
     def get_io_examples(self):
         return get_lganm_io_examples(self.envs,
                                      self.parents,
-                                     self.outcome)
+                                     self.outcome,
+                                     self.dt_dim,
+                                     self.trn_batch,
+                                     self.val_batch,
+                                     self.tst_batch)
 
     def name(self):
         return 'idef_Vars'
@@ -152,9 +160,9 @@ def get_task_settings(data_dict,
     '''
     if not dbg_mode:
         task_settings = TaskSettings(
-            train_size=128,
-            val_size=128,
-            batch_size=128,
+            train_size=8,
+            val_size=8,
+            batch_size=8,
             training_percentages=[2, 10, 20, 50, 100],
             N=10000,
             M=50,
@@ -166,13 +174,13 @@ def get_task_settings(data_dict,
             data_dict=data_dict)
     else:
         task_settings = TaskSettings(
-            train_size=128,
-            val_size=128,
-            batch_size=128,
-            training_percentages=[100],
-            N=1000,
-            M=8,
-            K=8,
+            train_size=32,
+            val_size=32,
+            batch_size=32,
+            training_percentages=[50],
+            N=5000,
+            M=6,
+            K=2,
             epochs=1,
             synthesizer=synthesizer,
             dbg_learn_parameters=dbg_learn_parameters,
@@ -182,8 +190,8 @@ def get_task_settings(data_dict,
 
 
 def mk_default_lib():
-    lib = OpLibrary(['compose', 'repeat', 'map_l',
-                     'fold_l', 'conv_l', 'zeros'])
+    lib = OpLibrary(['compose', 'map',
+                     'repeat', 'cat'])
     return lib
 
 
@@ -264,12 +272,17 @@ if __name__ == '__main__':
     prefixes = ['{}{}'.format(prefix, additional_prefix)
                 for prefix in seq_info_dict['prefixes']]
 
-    pkl_file = args.lganm_dir / args.exp / 'n_1000' / '{}.pickle'.format(241)
+    pkl_file = args.lganm_dir / args.exp / 'n_1000' / '{}.pickle'.format(160)
     with open(str(pkl_file), 'rb') as pl:
         lganm_dict = pickle.load(pl)
-        lganm_dict.update({'dict_name': 'lganm'})
-        lganm_dict.update({'repeat': args.repeat})
-        lganm_dict.update({'mid_size': lganm_dict['envs'][0].shape[1] - 1 })
+        lganm_parm = {'dict_name': 'lganm',
+                      'repeat': args.repeat,
+                      'mid_size': lganm_dict['envs'][0].shape[1] - 1,
+                      'out_type': 'integer'}
+        lganm_dict.update(lganm_parm)
+        # lganm_dict.update({'dict_name': 'lganm'})
+        # lganm_dict.update({'repeat': args.repeat})
+        # lganm_dict.update({'mid_size': lganm_dict['envs'][0].shape[1] - 1})
         print(lganm_dict['case'].sem)
         print(lganm_dict['case'].target)
         print(lganm_dict['case'].truth)

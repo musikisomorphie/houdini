@@ -129,6 +129,47 @@ class NumpyDataSetIterator(object):
         return inputs_batch, targets_batch
 
 
+class ListNumpyDataSetIterator(NumpyDataSetIterator):
+    """Generic data provider."""
+
+    def __init__(self,
+                 inputs_dim, 
+                 inputs, 
+                 targets, 
+                 batch_size, 
+                 max_num_batches=-1,
+                 shuffle_order=True, 
+                 rng=None):
+        super().__init__(inputs, 
+                         targets, 
+                         batch_size, 
+                         max_num_batches, 
+                         shuffle_order, 
+                         rng)
+        self.inputs_dim = inputs_dim
+
+    def next(self):
+        """Returns next data batch or raises `StopIteration` if at end."""
+        if self._curr_batch + 1 > self.num_batches:
+            # no more batches in current iteration through data set so start
+            # new epoch ready for another pass and indicate iteration is at end
+            self.new_epoch()
+            raise StopIteration()
+        # create an index slice corresponding to current batch number
+        batch_slice = slice(self._curr_batch * self.batch_size,
+                            (self._curr_batch + 1) * self.batch_size)
+        inputs_batch = self.inputs[batch_slice]
+        targets_batch = self.targets[batch_slice]
+        self._curr_batch += 1
+        
+        env_num = inputs_batch.shape[1] // self.inputs_dim
+        inputs_batch_split = np.split(inputs_batch, env_num, axis=-1)
+        print(inputs_batch_split[0].shape, inputs_batch.shape[1], len(inputs_batch_split), env_num)
+        
+        return inputs_batch_split, targets_batch
+
+
+
 class ImageGraphDataGenerator(NumpyDataSetIterator):
     """"""
 

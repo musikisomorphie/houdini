@@ -72,15 +72,15 @@ def is_evaluable(st, ns) -> Tuple[bool, int]:
         # (as seq-to-seq models aren't supported)
         # We support List<2dTensor> -> 2dTensor
         if type(unk.sort.args[0]) == AST.PPListSort:
-            in_is_list_of_2d_tensors = type(unk.sort.args[0].param_sort) == AST.PPTensorSort and len(
-                unk.sort.args[0].param_sort.shape) == 2
-            out_is_2d_tensor = type(
-                unk.sort.rtpe) == AST.PPTensorSort and unk.sort.rtpe.shape.__len__() == 2
+            # in_is_list_of_2d_tensors = type(unk.sort.args[0].param_sort) == AST.PPTensorSort and len(
+            #     unk.sort.args[0].param_sort.shape) == 2
+            # out_is_2d_tensor = type(
+            #     unk.sort.rtpe) == AST.PPTensorSort and unk.sort.rtpe.shape.__len__() == 2
 
-            if in_is_list_of_2d_tensors and out_is_2d_tensor:
-                continue
-            else:
-                return False, 6
+            # if in_is_list_of_2d_tensors and out_is_2d_tensor:
+            #     continue
+            # else:
+            return False, 6
 
         # If the input to the NN is an image:
         cnn_feature_dim = 64

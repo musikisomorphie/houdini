@@ -1,10 +1,11 @@
 import numpy as np
+import math
 import pyreadstat
 import pickle
 from pathlib import Path
 from typing import List, Dict, Tuple
 from matplotlib import pyplot as plt
-from Data.DataGenerator import NumpyDataSetIterator
+from Data.DataGenerator import NumpyDataSetIterator, ListNumpyDataSetIterator
 
 
 def mk_tag(tag: str, content: str, cls: List[str] = [], attribs: Dict = {}):
@@ -29,6 +30,21 @@ def append_to_file(a_file, content):
 def write_to_file(a_file, content):
     with open(a_file, "w") as fh:
         fh.write(content)
+
+
+def pad_array(env,
+              env_len):
+    assert env_len >= env.shape[0], \
+        'the max len {} should >= data len {}'.format(env_len, env.shape[0])
+    # print('divmod result:', q, r)
+    q, r = divmod(env_len, env.shape[0])
+    if q > 1:
+        env = np.repeat(env, q, axis=0)
+    if r > 0:
+        id_env = list(range(env.shape[0]))
+        np.random.shuffle(id_env)
+        env = np.concatenate((env, env[id_env[:r]]), axis=0)
+    return env
 
 
 def iterate_diff_training_sizes(train_io_examples, training_data_percentages):
@@ -67,9 +83,24 @@ def get_portec_io_examples(portec_file,
         df = df.loc[df[fltr] == 1]
         df = df.dropna(subset=feat)
         df = df.dropna(subset=label)
-        # # df = df.fillna(0)
-    df_trn = (df[feat].values,
-              df[label].values)
+        # df = df.fillna(0)
+    portec = list()
+    df_input, df_lab = list(), list()
+    max_len = 0
+    for i in range(2):
+        df_ptc = df.loc[df['PortecStudy'] == i + 1]
+        df_ptc = np.concatenate((df_ptc[feat].values,
+                                 df_ptc[label].values), axis=-1)
+        portec.append(df_ptc)
+        max_len = max(max_len, df_ptc.shape[0])
+
+    for ptc in portec:
+        ptc = pad_array(ptc, max_len)
+        df_input.append(ptc[:, :-len(label)])
+        df_lab.append(ptc[:, -len(label):])
+
+    df_trn = (np.stack(df_input, 1),
+              np.stack(df_lab, 1))
     print(df_trn[0].shape, df_trn[1].shape)
     df_val, df_tst = df_trn, df_trn
     return df_trn, df_val, df_tst
@@ -77,15 +108,49 @@ def get_portec_io_examples(portec_file,
 
 def get_lganm_io_examples(lganm_envs,
                           parents,
-                          outcome):
-    dt = np.concatenate(lganm_envs, axis=0)
-    msk = np.ones(dt.shape[1], dtype=bool)
+                          outcome,
+                          dt_dim,
+                          trn_batch,
+                          val_batch,
+                          tst_batch):
+
+    max_len = 0
+    dt_input, dt_lab = list(), list()
+    msk = np.ones(dt_dim, dtype=bool)
     msk[outcome] = False
-    print(msk)
-    dt_trn = (dt[:, msk], dt[:, ~msk])
+    for env in lganm_envs:
+        max_len = max(max_len, env.shape[0])
+
+    for env in lganm_envs:
+        env = pad_array(env, max_len)
+        dt_input.append(env[:, msk])
+        dt_lab.append(env[:, ~msk])
+
+    dt_trn = (np.stack(dt_input, 1),
+              np.stack(dt_lab, 1))
+    dt_val, dt_tst = dt_trn, dt_trn
+
+    # dt = np.concatenate(lganm_envs, axis=1)
+    # msk = np.ones(dt.shape[1], dtype=bool)
+    # outs = list(range(outcome, msk.shape[0], dt_dim))
+    # msk[outs] = False
+    print(msk, dt_trn[1].shape)
+    # input_dim = dt_dim - 1
+    # dt_trn = ListNumpyDataSetIterator(input_dim,
+    #                                   dt[:, msk],
+    #                                   dt[:, ~msk],
+    #                                   trn_batch)
+    # dt_val = ListNumpyDataSetIterator(input_dim,
+    #                                   dt[:, msk],
+    #                                   dt[:, ~msk],
+    #                                   val_batch)
+    # dt_tst = ListNumpyDataSetIterator(input_dim,
+    #                                   dt[:, msk],
+    #                                   dt[:, ~msk],
+    #                                   tst_batch)
     # print(msk, ~msk)
     # print(dt_trn[0].shape, dt_trn[1].shape)
-    dt_val, dt_tst = dt_trn, dt_trn
+    # dt_val, dt_tst = dt_trn, dt_trn
     return dt_trn, dt_val, dt_tst
 
 
@@ -97,12 +162,14 @@ def sav_to_csv(sav_file,
 
 def prep_sav(sav_file):
     df, meta = pyreadstat.read_sav(str(sav_file))
+
+    df['log2_id'] = np.log2(df.index.astype('int64') + 1)
     df['POLE'] = df['TCGA_4groups']
     df.loc[df['POLE'] == 1, 'POLE'] = 1
     df.loc[df['POLE'] == 2, 'POLE'] = 0
     df.loc[df['POLE'] == 3, 'POLE'] = 0
     df.loc[df['POLE'] == 4, 'POLE'] = 0
-    
+
     df['MMRd'] = df['TCGA_4groups']
     df.loc[df['MMRd'] == 1, 'MMRd'] = 0
     df.loc[df['MMRd'] == 2, 'MMRd'] = 1
@@ -114,6 +181,14 @@ def prep_sav(sav_file):
     df.loc[df['p53_mutant'] == 2, 'p53_mutant'] = 0
     df.loc[df['p53_mutant'] == 3, 'p53_mutant'] = 1
     df.loc[df['p53_mutant'] == 4, 'p53_mutant'] = 0
+
+    df['EBRT'] = df['ReceivedTx']
+    df.loc[df['EBRT'] == 1, 'EBRT'] = 1
+    df.loc[df['EBRT'] == 2, 'EBRT'] = 0
+
+    df['VBT'] = df['ReceivedTx']
+    df.loc[df['VBT'] == 1, 'VBT'] = 0
+    df.loc[df['VBT'] == 2, 'VBT'] = 1
 
     new_sav = sav_file.parents[0] / (sav_file.stem + '_prep.sav')
     print(new_sav)

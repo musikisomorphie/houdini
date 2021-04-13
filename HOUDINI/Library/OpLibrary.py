@@ -46,18 +46,23 @@ class OpLibrary(FnLibrary):
                                                                  self.A),
                                                        self.func(self.A,
                                                                  self.A)), Op.pp_repeat))
-        elif op == 'map_l':
-            self.addItem(PPLibItem('map_l', self.func(self.func(self.A,
-                                                                self.B),
-                                                      self.func(self.lst(self.A),
-                                                                self.lst(self.B))), Op.pp_map_list))
-        elif op == 'fold_l':
-            self.addItem(PPLibItem('fold_l', self.func(self.func(self.B, self.A, self.B),
-                                                       self.B,
-                                                       self.func(self.lst(self.A), self.B)), Op.pp_reduce_list))
-        elif op == 'conv_l':
-            self.addItem(PPLibItem('conv_l', self.func(self.func(self.lst(self.A), self.B),
-                                                       self.func(self.lst(self.A), self.lst(self.B))), Op.pp_conv_list))
+        elif op == 'cat':
+            self.addItem(PPLibItem('cat', self.func(self.func(self.A,
+                                                              self.lst(self.B)),
+                                                    self.func(self.A,
+                                                              self.B)), Op.pp_cat))
+        elif op == 'map':
+            self.addItem(PPLibItem('map', self.func(self.func(self.A,
+                                                              self.B),
+                                                    self.func(self.lst(self.A),
+                                                              self.lst(self.B))), Op.pp_map))
+        elif op == 'fold':
+            self.addItem(PPLibItem('fold', self.func(self.func(self.B, self.A, self.B),
+                                                     self.B,
+                                                     self.func(self.lst(self.A), self.B)), Op.pp_reduce))
+        elif op == 'conv':
+            self.addItem(PPLibItem('conv', self.func(self.func(self.lst(self.A), self.B),
+                                                     self.func(self.lst(self.A), self.lst(self.B))), Op.pp_conv))
         elif op == 'zeros':
             self.addItem(PPLibItem('zeros', self.func(AST.PPDimVar('a'),
                                                       mkRealTensorSort([1, 'a'])), Op.pp_get_zeros))
@@ -71,6 +76,10 @@ class OpLibrary(FnLibrary):
             self.addItem((PPLibItem('fold_g', self.func(self.func(self.B, self.A, self.B),
                                                         self.B,
                                                         self.func(self.graph(self.A), self.B)), Op.pp_reduce_graph)))
+        elif op == 'cat_l':
+            self.addItem(PPLibItem('cat_l', self.func(self.lst(self.A),
+                                                      self.B), Op.pp_cat_list))
+
         elif op == 'flatten_2d_list':
             self.addItem(PPLibItem('flatten_2d_list', self.func(self.func(self.B,
                                                                           self.C),

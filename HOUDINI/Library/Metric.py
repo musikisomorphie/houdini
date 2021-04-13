@@ -125,7 +125,7 @@ class coxph():
         expg = np.exp(pred).reshape(1, -1)
         surv = np.exp(-pd.DataFrame(bch.values.reshape(-1, 1).dot(expg),
                                     index=bch.index))
-        print(surv.shape)
+        # print(surv.shape)
         return surv
 
     def eval_surv(self,
