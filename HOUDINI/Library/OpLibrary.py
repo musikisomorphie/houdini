@@ -33,7 +33,12 @@ class OpLibrary(FnLibrary):
         return mkGraphSort(t)
 
     def addOpItem(self, op: str):
-        if op == 'compose':
+        if op == 'do':
+            self.addItem(PPLibItem('do', self.func(self.func(self.A,
+                                                             self.A),
+                                                   self.func(self.lst(self.A),
+                                                             self.lst(self.A))), Op.pp_do))
+        elif op == 'compose':
             self.addItem(PPLibItem('compose', self.func(self.func(self.B,
                                                                   self.C),
                                                         self.func(self.A,

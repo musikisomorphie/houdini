@@ -179,8 +179,8 @@ def get_task_settings(data_dict,
             batch_size=32,
             training_percentages=[50],
             N=5000,
-            M=6,
-            K=2,
+            M=3,
+            K=3,
             epochs=1,
             synthesizer=synthesizer,
             dbg_learn_parameters=dbg_learn_parameters,
@@ -190,7 +190,7 @@ def get_task_settings(data_dict,
 
 
 def mk_default_lib():
-    lib = OpLibrary(['compose', 'map',
+    lib = OpLibrary(['do', 'compose', 'map',
                      'repeat', 'cat'])
     return lib
 
@@ -272,12 +272,12 @@ if __name__ == '__main__':
     prefixes = ['{}{}'.format(prefix, additional_prefix)
                 for prefix in seq_info_dict['prefixes']]
 
-    pkl_file = args.lganm_dir / args.exp / 'n_1000' / '{}.pickle'.format(160)
+    pkl_file = args.lganm_dir / args.exp / 'n_1000' / '{}.pickle'.format(80)
     with open(str(pkl_file), 'rb') as pl:
         lganm_dict = pickle.load(pl)
         lganm_parm = {'dict_name': 'lganm',
                       'repeat': args.repeat,
-                      'mid_size': lganm_dict['envs'][0].shape[1] - 1,
+                      'mid_size': lganm_dict['envs'][0].shape[1],
                       'out_type': 'integer'}
         lganm_dict.update(lganm_parm)
         # lganm_dict.update({'dict_name': 'lganm'})

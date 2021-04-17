@@ -6,6 +6,7 @@ import math
 from abc import abstractmethod
 import json
 import os
+import numpy
 
 
 class SaveableNNModule(nn.Module):
@@ -117,13 +118,13 @@ class NetCNN(SaveableNNModule):
         return x
 
 
-class NetMLP(SaveableNNModule):
+class NetMLP1(SaveableNNModule):
     def __init__(self, name, input_dim, output_dim, output_activation=None, hidden_layer=True):
         """
         :param
         :param output_activation: [None, F.softmax, torch.sigmoid]
         """
-        super(NetMLP, self).__init__()
+        super(NetMLP1, self).__init__()
         self.output_dim = output_dim
         self.name = name
         self.output_activation = output_activation
@@ -349,21 +350,26 @@ class NetGRAPHNew(SaveableNNModule):
 
 def get_nn_from_params_dict(uf):
     new_nn = None
-    if uf["type"] == "MLP":
-        new_nn = NetMLP(uf["name"],
-                        uf["input_dim"], uf["output_dim"], uf["output_activation"])
-    elif uf["type"] == "CNN":
-        new_nn = NetCNN(uf["name"], uf["input_dim"], uf["input_ch"])
-    elif uf["type"] == "RNN":
-        output_dim = uf["output_dim"] if "output_dim" in uf else None
-        output_activation = uf["output_activation"] if "output_activation" in uf else None
-        output_sequence = uf["output_sequence"] if "output_sequence" in uf else False
-        new_nn = NetRNN(uf["name"], uf["input_dim"], uf["hidden_dim"],
-                        output_dim=output_dim, output_activation=output_activation,
-                        output_sequence=output_sequence)
-    elif uf["type"] == "GCONVNew":
-        new_nn = NetGRAPHNew(
-            uf["name"], None, uf["input_dim"], num_output_channels=100)
+    if uf['type'] == 'MLP':
+        new_nn = NetMLP(uf['name'],
+                        uf['input_dim'],
+                        uf['output_dim'],
+                        uf['bias'])
+    elif uf['type'] == 'DO':
+        new_nn = NetDO(uf['name'],
+                       uf['input_dim'])
+    # elif uf["type"] == "CNN":
+    #     new_nn = NetCNN(uf["name"], uf["input_dim"], uf["input_ch"])
+    # elif uf["type"] == "RNN":
+    #     output_dim = uf["output_dim"] if "output_dim" in uf else None
+    #     output_activation = uf["output_activation"] if "output_activation" in uf else None
+    #     output_sequence = uf["output_sequence"] if "output_sequence" in uf else False
+    #     new_nn = NetRNN(uf["name"], uf["input_dim"], uf["hidden_dim"],
+    #                     output_dim=output_dim, output_activation=output_activation,
+    #                     output_sequence=output_sequence)
+    # elif uf["type"] == "GCONVNew":
+    #     new_nn = NetGRAPHNew(
+    #         uf["name"], None, uf["input_dim"], num_output_channels=100)
     else:
         raise NotImplementedError()
 
@@ -377,3 +383,58 @@ def get_nn_from_params_dict(uf):
     c_trainable_parameters = list(new_nn.parameters())
 
     return new_nn, c_trainable_parameters
+
+
+class NetDO(SaveableNNModule):
+    def __init__(self,
+                 name,
+                 input_dim):
+        """
+        :param
+        :param output_activation: [None, F.softmax, torch.sigmoid]
+        """
+        super(NetDO, self).__init__()
+        self.name = name
+        self.input_dim = input_dim
+
+        self.fc1 = nn.Linear(input_dim, input_dim)
+        self.fc2 = nn.Linear(input_dim, input_dim)
+
+    def forward(self, x):
+        if type(x) == tuple:
+            x = x[0]
+
+        x1 = F.relu(self.fc1(x))
+        xprob = F.softmax(self.fc2(x1), dim=-1)
+
+        return xprob * x, xprob.cpu().detach().numpy()
+
+
+class NetMLP(SaveableNNModule):
+    def __init__(self,
+                 name,
+                 input_dim,
+                 output_dim,
+                 bias):
+        """
+        :param
+        :param output_activation: [None, F.softmax, torch.sigmoid]
+        """
+        super(NetMLP, self).__init__()
+        self.name = name
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+
+        self.fc1 = nn.Linear(input_dim, input_dim)
+        self.fc2 = nn.Linear(input_dim, output_dim, bias=bias)
+
+    def forward(self, x):
+        if type(x) == tuple:
+            x, x_prob = x
+        else:
+            x_prob = None
+
+        x1 = F.relu(self.fc1(x))
+        x2 = self.fc2(x1)
+
+        return x2, x_prob

@@ -142,7 +142,8 @@ class Interpreter:
                       data_loader,
                       output_type,
                       new_fns_dict,
-                      compute_grad=False):
+                      compute_grad=False,
+                      compute_prob=False):
         c_num_matching_datapoints = 0
         mse = 0  # atm, only accumulated, if the output is a real number
         global_vars = {"lib": self.library}
@@ -154,32 +155,38 @@ class Interpreter:
         else:
             num_datapoints = reduce(
                 lambda a, b: a + b.num_datapoints, data_loader, 0.)
-        y_pred_all, y_all, grad_all = list(), list(), list()
+        y_pred_all, y_all = list(), list()
+        grad_all, prob_all = list(), list()
         # num_datapoints = data_loader.dataset.__len__() if type(data_loader) == DataLoader else data_loader[0].dataset.__len__()
         for y_pred, y, x_in in self._predict_data(program, data_loader, new_fns_dict):
 
             # if x is a 2d list, convert it to a variable
-            graph = y_pred
-            if type(graph) == list and type(graph[0]) == list:
-                # check if it's a list of tuples
-                if graph.__len__() > 0 and type(graph[0]) == list \
-                        and type(graph[0][0]) == tuple:
-                    # graph = [i[1] for i in graph]
-                    graph = [[j[1] for j in i] for i in graph]
+            # graph = y_pred
+            # if type(graph) == list and type(graph[0]) == list:
+            #     # check if it's a list of tuples
+            #     if graph.__len__() > 0 and type(graph[0]) == list \
+            #             and type(graph[0][0]) == tuple:
+            #         # graph = [i[1] for i in graph]
+            #         graph = [[j[1] for j in i] for i in graph]
 
-                if graph.__len__() > 0 and type(graph[0]) == list:
-                    # concatenate all along cols
-                    graph = [[torch.unsqueeze(j, dim=2)
-                              for j in i] for i in graph]
-                    graph = [torch.cat(i, dim=2) for i in graph]
+            #     if graph.__len__() > 0 and type(graph[0]) == list:
+            #         # concatenate all along cols
+            #         graph = [[torch.unsqueeze(j, dim=2)
+            #                   for j in i] for i in graph]
+            #         graph = [torch.cat(i, dim=2) for i in graph]
 
-                    # concatenate along rows
-                    graph = [torch.unsqueeze(a, dim=2) for a in graph]
-                    graph = torch.cat(graph, dim=2)
-                y_pred = graph
-            y_pred_output = y_pred if type(y_pred) != tuple else y_pred[1]
-            if y_pred_output.shape.__len__() == 4 and y_pred_output.shape[1] == 2:
-                y_pred_output = torch.squeeze(y_pred_output[:, 1, :, :])
+            #         # concatenate along rows
+            #         graph = [torch.unsqueeze(a, dim=2) for a in graph]
+            #         graph = torch.cat(graph, dim=2)
+            #     y_pred = graph
+            if type(y_pred) == tuple:
+                y_pred_output, pred_prob = y_pred
+            else:
+                pred_prob = None
+            prob_all.append(pred_prob)
+            # y_pred_output = y_pred if type(y_pred) != tuple else y_pred[0]
+            # if y_pred_output.shape.__len__() == 4 and y_pred_output.shape[1] == 2:
+            #     y_pred_output = torch.squeeze(y_pred_output[:, 1, :, :])
 
             # in case of an int, also calcualte the sqrt(RMSE)
             if output_type == ProgramOutputType.INTEGER:
@@ -212,7 +219,7 @@ class Interpreter:
             if compute_grad:
                 x_in = torch.autograd.Variable(x_in.clone(),
                                                requires_grad=True)
-                x_pred = eval(program, global_vars)(x_in)
+                x_pred = eval(program, global_vars)(x_in)[0]
                 # if type(y_pred) == tuple:
                 #     x_pred = x_pred[1]
                 grad_outputs = torch.ones(x_pred.shape)
@@ -245,7 +252,10 @@ class Interpreter:
                 len(parents.union(cand_set))
             print(grad_mean, grad_idx, cand_set, outcome, parents, jacob)
 
-            # print(grad_mean)
+        if compute_prob and prob_all and prob_all[0] is not None:
+            prob_all = np.concatenate(prob_all, axis=0)
+            print('mean {} and var {} of the prob.'.format(np.mean(prob_all, axis=0),
+                                                           np.var(prob_all, axis=0)))
 
         accuracy = c_num_matching_datapoints / float(num_datapoints)
         mse = mse / float(num_datapoints)
@@ -268,7 +278,7 @@ class Interpreter:
                 g_in = g_in.unsqueeze(dim=0).unsqueeze(dim=0).float().cuda()
                 g_in = torch.autograd.Variable(g_in,
                                                requires_grad=True)
-                g_pred = eval(program, global_vars)(g_in)
+                g_pred = eval(program, global_vars)(g_in)[0]
                 # g_out = torch.ones(g_pred.shape)
                 cox_grads = torch.autograd.grad(outputs=g_pred,
                                                 inputs=g_in,
@@ -349,23 +359,23 @@ class Interpreter:
             for y_pred, y, x_in in self._predict_data(program, data_loader_tr, new_fns_dict):
                 # print(x_in.shape)
                 # if x is a 2d list, convert it to a variable
-                if type(y_pred) == list:
-                    # check if it's a list of tuples
-                    if y_pred.__len__() > 0 and type(y_pred[0]) == list \
-                            and type(y_pred[0][0]) == tuple:
-                        # y_pred = [i[1] for i in y_pred]
-                        y_pred = [[j[1] for j in i] for i in y_pred]
+                # if type(y_pred) == list:
+                #     # check if it's a list of tuples
+                #     if y_pred.__len__() > 0 and type(y_pred[0]) == list \
+                #             and type(y_pred[0][0]) == tuple:
+                #         # y_pred = [i[1] for i in y_pred]
+                #         y_pred = [[j[1] for j in i] for i in y_pred]
 
-                    if y_pred.__len__() > 0 and type(y_pred[0]) == list:
-                        # concatenate all along cols
-                        y_pred = [[torch.unsqueeze(j, dim=2)
-                                   for j in i] for i in y_pred]
-                        y_pred = [torch.cat(i, dim=2) for i in y_pred]
+                #     if y_pred.__len__() > 0 and type(y_pred[0]) == list:
+                #         # concatenate all along cols
+                #         y_pred = [[torch.unsqueeze(j, dim=2)
+                #                    for j in i] for i in y_pred]
+                #         y_pred = [torch.cat(i, dim=2) for i in y_pred]
 
-                        # concatenate along rows
-                        y_pred = [torch.unsqueeze(a, dim=2) for a in y_pred]
-                        y_pred = torch.cat(y_pred, dim=2)
-                    y_pred = y_pred[:, 1, :, :]
+                #         # concatenate along rows
+                #         y_pred = [torch.unsqueeze(a, dim=2) for a in y_pred]
+                #         y_pred = torch.cat(y_pred, dim=2)
+                #     y_pred = y_pred[:, 1, :, :]
                 if type(y_pred) == tuple:
                     # if it's a tuple, then its (output_logits, output)
                     loss = criterion(y_pred[0], y)
@@ -492,7 +502,8 @@ class Interpreter:
                                          data_loader_val,
                                          output_type,
                                          new_fns_dict,
-                                         compute_grad=is_lganm)
+                                         compute_grad=is_lganm,
+                                         compute_prob=True)
 
             test_acc = self._get_accuracy(program,
                                           data_loader_test,
@@ -524,34 +535,59 @@ class Interpreter:
                 "test_accuracy": test_accuracy, "evaluations_np": evaluations_np}
 
     # program=st, output_type=output_type, unkSortMap=unkSortMap, io_examples=self.ioExamples
-    def evaluate(self, program, output_type_s, unkSortMap=None,
-                 io_examples_tr=None, io_examples_val=None, io_examples_test=None, dbg_learn_parameters=True) -> dict:
+    def evaluate(self,
+                 program,
+                 output_type_s,
+                 unkSortMap=None,
+                 io_examples_tr=None,
+                 io_examples_val=None,
+                 io_examples_test=None,
+                 dbg_learn_parameters=True) -> dict:
 
         is_graph = type(output_type_s) == AST.PPGraphSort
 
         program_str = ReprUtils.repr_py(program)
-        output_type = self.get_program_output_type(
-            io_examples_val, output_type_s)
+        output_type = self.get_program_output_type(io_examples_val,
+                                                   output_type_s)
 
-        unknown_fns_def = _get_unknown_fns_definitions(unkSortMap, is_graph)
-        res = self.evaluate_(program=program_str, output_type=output_type, unknown_fns_def=unknown_fns_def,
-                             io_examples_tr=io_examples_tr, io_examples_val=io_examples_val,
+        unknown_fns_def = self.get_unknown_fns_definitions(unkSortMap,
+                                                           is_graph)
+
+        res = self.evaluate_(program=program_str,
+                             output_type=output_type,
+                             unknown_fns_def=unknown_fns_def,
+                             io_examples_tr=io_examples_tr,
+                             io_examples_val=io_examples_val,
                              io_examples_test=io_examples_test,
                              dbg_learn_parameters=dbg_learn_parameters)
         return res
 
-    def get_program_output_type(self, io_examples_val, output_sort):
+    def get_program_output_type(self,
+                                io_examples_val,
+                                output_sort):
+
         if self.data_dict['out_type'] == 'hazard':
             output_type = ProgramOutputType.HAZARD
         elif self.data_dict['out_type'] == 'integer':
             output_type = ProgramOutputType.INTEGER
         else:
-            raise TypeError('invalid output type {}'.format(self.data_dict['out_type']))
+            raise TypeError('invalid output type {}'.format(
+                self.data_dict['out_type']))
+        return output_type
 
         # if issubclass(type(io_examples_val), NumpyDataSetIterator):
-        #     val_labels = io_examples_val.targets
-        #     label_shape = val_labels.shape
-        #     label_max_value = val_labels.max()
+        #     val_labels = io_examples_val.elif uf["type"] == "CNN":
+    #     new_nn = NetCNN(uf["name"], uf["input_dim"], uf["input_ch"])
+    # elif uf["type"] == "RNN":
+    #     output_dim = uf["output_dim"] if "output_dim" in uf else None
+    #     output_activation = uf["output_activation"] if "output_activation" in uf else None
+    #     output_sequence = uf["output_sequence"] if "output_sequence" in uf else False
+    #     new_nn = NetRNN(uf["name"], uf["input_dim"], uf["hidden_dim"],
+    #                     output_dim=output_dim, output_activation=output_activation,
+    #                     output_sequence=output_sequence)
+    # elif uf["type"] == "GCONVNew":
+    #     new_nn = NetGRAPHNew(
+    #         uf["name"], None, uf["input_dim"], num_output_channels=100)max()
         #     label_min_value = val_labels.min()
         # elif type(io_examples_val) == tuple:
         #     label_shape = io_examples_val[1].shape
@@ -579,87 +615,109 @@ class Interpreter:
         #         output_type = ProgramOutputType.INTEGER
         # else:
         #     raise TypeError('invalid output type {}'.format(type(output_sort)))
-        return output_type
+        # return output_type
 
+    def get_unknown_fns_definitions(self, unkSortMap, is_graph=False):
+        # TODO: double-check. may need re-writing.
+        unk_fns_interpreter_def_list = []
 
-def _get_unknown_fns_definitions(unkSortMap, is_graph=False):
-    # TODO: double-check. may need re-writing.
-    unk_fns_interpreter_def_list = []
+        for unk_fn_name, unk_fn in unkSortMap.items():
 
-    for unk_fn_name, unk_fn in unkSortMap.items():
+            # ******** Process output activation ***************
+            fn_input_sort = unk_fn.args[0]
+            fn_output_sort = unk_fn.rtpe
+            output_dim = fn_output_sort.shape[1].value
+            output_type = fn_output_sort.param_sort
+            print(fn_input_sort, fn_output_sort, type(output_type))
 
-        # ******** Process output activation ***************
-        fn_output_sort = unk_fn.rtpe
-        output_dim = fn_output_sort.shape[1].value
-        output_type = fn_output_sort.param_sort
-        if is_graph:
-            output_activation = None
-        elif type(fn_output_sort) == AST.PPTensorSort and fn_output_sort.shape.__len__() == 2:
-
-            if type(output_type) == AST.PPReal or type(output_type) == AST.PPInt:
-                output_activation = None
-            elif type(output_type) == AST.PPBool and output_dim == 1:
-                output_activation = torch.sigmoid
-            elif type(output_type) == AST.PPBool and output_dim > 1:
-                output_activation = nn.Softmax(dim=1)
+            if type(fn_input_sort) == AST.PPTensorSort and fn_input_sort.shape.__len__() == 2:
+                input_dim = fn_input_sort.shape[1].value
+                if input_dim == output_dim:
+                    uf = {'type': 'DO',
+                          'name': unk_fn_name,
+                          'input_dim': input_dim}
+                else:
+                    uf = {'type': 'MLP',
+                          'name': unk_fn_name,
+                          'input_dim': input_dim,
+                          'output_dim': output_dim,
+                          'bias': False if self.data_dict['out_type'] == 'hazard' else True}
+                unk_fns_interpreter_def_list.append(uf)
             else:
                 raise NotImplementedError()
 
-            print(fn_output_sort, type(output_type))
+        return unk_fns_interpreter_def_list
+
+        # if is_graph:
+        #     output_activation = None
+        # elif type(fn_output_sort) == AST.PPTensorSort and fn_output_sort.shape.__len__() == 2:
+
+        #     if type(output_type) == AST.PPReal or type(output_type) == AST.PPInt:
+        #         output_activation = None
+        #     elif type(output_type) == AST.PPBool and output_dim == 1:
+        #         output_activation = torch.sigmoid
+        #     elif type(output_type) == AST.PPBool and output_dim > 1:
+        #         output_activation = nn.Softmax(dim=1)
+        #     else:
+        #         raise NotImplementedError()
+
         # the only other possibility
-        elif not (type(fn_output_sort) == AST.PPTensorSort and fn_output_sort.shape.__len__() == 4):
-            raise NotImplementedError()
+        # elif not (type(fn_output_sort) == AST.PPTensorSort and fn_output_sort.shape.__len__() == 4):
+        #     raise NotImplementedError()
 
-        fn_input_sort = unk_fn.args[0]
-        if type(fn_input_sort) == AST.PPListSort:
-            if is_graph:
-                input_dim = fn_input_sort.param_sort.shape[1].value
-                uf = {"type": "GCONVNew", "name": unk_fn_name,
-                      "input_dim": input_dim}
-                unk_fns_interpreter_def_list.append(uf)
-            else:
-                raise NotImplementedError()
-                # input_list_item_sort = fn_input_sort.param_sort
-                # # make sure the items in the list are tensors
-                # assert(type(input_list_item_sort) == AST.PPTensorSort)
-                # input_dim = fn_input_sort.param_sort.shape[1].value
-                # hidden_dim = 100
-                # # uf = {"type": "RNN", "name": unk_fn_name, "input_dim": input_dim, "hidden_dim": hidden_dim,
-                # #       "output_dim": output_dim, "output_activation": output_activation}
-                # uf = {"type": "MLP", "name": unk_fn_name, "input_dim": input_dim,
-                #       "output_dim": output_dim, "output_activation": output_activation}
-                # unk_fns_interpreter_def_list.append(uf)
-        elif type(fn_input_sort) == AST.PPTensorSort and fn_input_sort.shape.__len__() == 4:
-            if type(fn_output_sort) == AST.PPTensorSort and fn_output_sort.shape.__len__() == 4:
-                # it's a cnn
-                input_dim = fn_input_sort.shape[2].value
-                input_ch = fn_input_sort.shape[1].value
-                uf = {"type": "CNN", "name": unk_fn_name,
-                      "input_dim": input_dim, "input_ch": input_ch}
-                unk_fns_interpreter_def_list.append(uf)
-            elif type(fn_output_sort) == AST.PPTensorSort and fn_output_sort.shape.__len__() == 2:
-                # FROM CNN's features to a vector using an MLP
-                input_dim = fn_input_sort.shape[1].value * \
-                    fn_input_sort.shape[2].value * fn_input_sort.shape[3].value
-                uf = {"type": "MLP", "name": unk_fn_name, "input_dim": input_dim,
-                      "output_dim": output_dim, "output_activation": output_activation}
-                unk_fns_interpreter_def_list.append(uf)
-            else:
-                raise NotImplementedError()
+        # fn_input_sort = unk_fn.args[0]
+        # if type(fn_input_sort) == AST.PPListSort:
+        #     if is_graph:
+        #         input_dim = fn_input_sort.param_sort.shape[1].value
+        #         uf = {"type": "GCONVNew", "name": unk_fn_name,
+        #               "input_dim": input_dim}
+        #         unk_fns_interpreter_def_list.append(uf)
+        #     else:
+        #         raise NotImplementedError()
+        #         # input_list_item_sort = fn_input_sort.param_sort
+        #         # # make sure the items in the list are tensors
+        #         # assert(type(input_list_item_sort) == AST.PPTensorSort)
+        #         # input_dim = fn_input_sort.param_sort.shape[1].value
+        #         # hidden_dim = 100
+        #         # # uf = {"type": "RNN", "name": unk_fn_name, "input_dim": input_dim, "hidden_dim": hidden_dim,
+        #         # #       "output_dim": output_dim, "output_activation": output_activation}
+        #         # uf = {"type": "MLP", "name": unk_fn_name, "input_dim": input_dim,
+        #         #       "output_dim": output_dim, "output_activation": output_activation}
+        #         # unk_fns_interpreter_def_list.append(uf)
+        # elif type(fn_input_sort) == AST.PPTensorSort and fn_input_sort.shape.__len__() == 4:
+        #     if type(fn_output_sort) == AST.PPTensorSort and fn_output_sort.shape.__len__() == 4:
+        #         # it's a cnn
+        #         input_dim = fn_input_sort.shape[2].value
+        #         input_ch = fn_input_sort.shape[1].value
+        #         uf = {"type": "CNN", "name": unk_fn_name,
+        #               "input_dim": input_dim, "input_ch": input_ch}
+        #         unk_fns_interpreter_def_list.append(uf)
+        #     elif type(fn_output_sort) == AST.PPTensorSort and fn_output_sort.shape.__len__() == 2:
+        #         # FROM CNN's features to a vector using an MLP
+        #         input_dim = fn_input_sort.shape[1].value * \
+        #             fn_input_sort.shape[2].value * fn_input_sort.shape[3].value
+        #         uf = {"type": "MLP", "name": unk_fn_name, "input_dim": input_dim,
+        #               "output_dim": output_dim, "output_activation": output_activation}
+        #         unk_fns_interpreter_def_list.append(uf)
+        #     else:
+        #         raise NotImplementedError()
 
-        elif type(fn_input_sort) == AST.PPTensorSort and fn_input_sort.shape.__len__() == 2:
-            input_dim = fn_input_sort.shape[1].value
-            if unk_fn.args.__len__() == 2:
-                fn_input2_sort = unk_fn.args[1]
-                input_dim += fn_input2_sort.shape[1].value
-            uf = {"type": "MLP", "name": unk_fn_name, "input_dim": input_dim,
-                  "output_dim": output_dim, "output_activation": output_activation}
-            unk_fns_interpreter_def_list.append(uf)
-        else:
-            raise NotImplementedError()
+        # elif type(fn_input_sort) == AST.PPTensorSort and fn_input_sort.shape.__len__() == 2:
+        #     input_dim = fn_input_sort.shape[1].value
+        #     if unk_fn.args.__len__() == 2:
+        #         fn_input2_sort = unk_fn.args[1]
+        #         input_dim += fn_input2_sort.shape[1].value
+        #     if input_dim == output_dim:
+        #         uf = {"type": "DO", "name": unk_fn_name, "input_dim": input_dim}
+        #     else:
+        #         uf = {"type": "MLP", "name": unk_fn_name, "input_dim": input_dim,
+        #               "output_dim": output_dim, "output_activation": output_activation}
+        #     unk_fns_interpreter_def_list.append(uf)
+        # else:
+        #     raise NotImplementedError()
 
         # uf = {"type": "CNN", "name": "nn_fun_1", "input_dim": 28,
         #      "input_ch": 1, "output_dim": 1, "output_activation": torch.sigmoid, "is_last": False}
         # unk_fns_interpreter_def_list.append(uf)
 
-    return unk_fns_interpreter_def_list
+        # return unk_fns_interpreter_def_list

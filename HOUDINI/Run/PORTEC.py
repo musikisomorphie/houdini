@@ -169,9 +169,9 @@ def get_task_settings(data_dict,
             batch_size=128,
             training_percentages=[100],
             N=200,
-            M=4,
-            K=4,
-            epochs=6,
+            M=1,
+            K=1,
+            epochs=8,
             synthesizer=synthesizer,
             dbg_learn_parameters=dbg_learn_parameters,
             learning_rate=0.02,
@@ -180,7 +180,7 @@ def get_task_settings(data_dict,
 
 
 def mk_default_lib():
-    lib = OpLibrary(['compose', 'map',
+    lib = OpLibrary(['do', 'compose', 'map',
                      'repeat', 'cat'])
     return lib
 
@@ -230,7 +230,7 @@ def parse_args():
                         help='path to the visualization folder')
     parser.add_argument('--repeat',
                         type=int,
-                        default=16,
+                        default=32,
                         help='num of repeated experiments')
     args = parser.parse_args()
 
@@ -254,10 +254,12 @@ if __name__ == '__main__':
     else:
         portec_dict = portec_dict['ImmuneOrg']
 
+    mid_size = len(portec_dict['clinical_meta']['causal'].keys()) + \
+        len(portec_dict['clinical_meta']['outcome'])
     portec_parm = {'dict_name': 'portec',
                    'file': args.dt_file,
                    'repeat': args.repeat,
-                   'mid_size': len(portec_dict['clinical_meta']['causal'].keys()),
+                   'mid_size': mid_size,
                    'out_type': 'hazard'}
     portec_dict.update(portec_parm)
 

@@ -135,4 +135,7 @@ def is_evaluable(st, ns) -> Tuple[bool, int]:
     if number_of_mlp_nns > 2:
         return False, 16
 
+    if lib_names.count('do') != 1:
+        return False, 17
+
     return True, 0

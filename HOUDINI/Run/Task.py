@@ -250,6 +250,7 @@ class Task:
         res = TaskResult()
         for i, (c_tr_io_examples, c_tr_num_items) in enumerate(iterate_diff_training_sizes(train_io,
                                                                                            self.settings.training_percentages)):
+
             interpreter = nsynth.interpreter
             c_iterations_per_epoch = c_tr_num_items // interpreter.batch_size + \
                 (1 if c_tr_num_items % interpreter.batch_size != 0 else 0)

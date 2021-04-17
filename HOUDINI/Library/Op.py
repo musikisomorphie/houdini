@@ -46,30 +46,58 @@ def pp_compose(g, f):
 
 def pp_cat(fn):
     def ret(x):
-        assert isinstance(x, torch.autograd.Variable), \
-            'the input type {} is not torch variable'.format(type(x))
-        interm = fn(x)
+        # assert isinstance(x, torch.autograd.Variable), \
+        # 'the input type {} is not torch variable'.format(type(x))
+        interm, iarg = fn(x)
         # print(x.shape, output.shape)
         batch, env = interm.shape[0], interm.shape[1]
         # print(len(interm), interm[0].shape)
-        return torch.reshape(interm, (batch * env, -1))
+        return torch.reshape(interm, (batch * env, -1)), iarg
     return ret
 
-def pp_map(fn):
+
+def pp_do(fn):
+    # only allow do function once
     def ret(iterable):
+        if type(iterable) == tuple:
+            iterable = iterable[0]
+
         assert isinstance(iterable, torch.autograd.Variable), \
             'the input type {} is not torch variable'.format(type(iterable))
 
         batch, env = iterable.shape[0], iterable.shape[1]
         iterable = torch.reshape(iterable, (batch * env, -1))
         # print('iterable', iterable.shape)
-        interm = fn(iterable)
+        interm, iarg = fn(iterable)
         output = torch.reshape(interm, (batch, env, -1))
         # iterable = _tensor_to_list(iterable)
         # interm = list(map(fn, iterable))
         # print(len(interm), len(iterable), iterable[0].shape)
         # output = _list_to_tensor(interm)
-        return output
+        return output, iarg
+    return ret
+
+
+def pp_map(fn):
+    def ret(iterable):
+        if type(iterable) == tuple:
+            iterable, iarg = iterable
+        else:
+            iarg = None
+
+        assert isinstance(iterable, torch.autograd.Variable), \
+            'the input type {} is not torch variable'.format(type(iterable))
+
+        batch, env = iterable.shape[0], iterable.shape[1]
+        iterable = torch.reshape(iterable, (batch * env, -1))
+        # print('iterable', iterable.shape)
+        interm, iarg = fn((iterable, iarg))
+        output = torch.reshape(interm, (batch, env, -1))
+        # iterable = _tensor_to_list(iterable)
+        # interm = list(map(fn, iterable))
+        # print(len(interm), len(iterable), iterable[0].shape)
+        # output = _list_to_tensor(interm)
+        return output, iarg
     return ret
 
 
