@@ -77,13 +77,13 @@ ImmunePrep:
             Grade_2Cat: 0
             LVSI_2Cat: 0
             L1CAM_2var: 0
+            log2_av_tot_cd8t: 0
+            log2_id: 0
             POLE: 0
             MMRd: 0
             p53_mutant: 0
-            log2_av_tot_cd8t: 0
             EBRT: 0
             VBT: 0
-            log2_id: 0
             # log2_av_tot_cd103t: 0
             # log2_av_dblt: 0
             # - Age

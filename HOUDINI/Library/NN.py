@@ -399,15 +399,30 @@ class NetDO(SaveableNNModule):
 
         self.fc1 = nn.Linear(input_dim, input_dim)
         self.fc2 = nn.Linear(input_dim, input_dim)
+        self.drop1 = nn.Dropout(0.2)
+        self.w0 = nn.Parameter(data=torch.zeros(
+            1, input_dim - 5), requires_grad=True)
+        self.w1 = nn.Parameter(data=torch.zeros(
+            1, 1), requires_grad=True)
+        self.w2 = nn.Parameter(data=torch.zeros(
+            1, 1), requires_grad=True)
 
     def forward(self, x):
         if type(x) == tuple:
             x = x[0]
 
-        x1 = F.relu(self.fc1(x))
-        xprob = F.softmax(self.fc2(x1), dim=-1)
+        x0, x1, x2 = torch.split(x, [self.input_dim - 5, 3, 2], dim=-1)
+        # x1 = F.leaky_relu(self.fc1(x), inplace=False)
+        # xprob = torch.sigmoid(x1)
+        xprob0 = torch.sigmoid(self.w0) 
+        xprob1 = torch.sigmoid(self.w1)
+        xprob2 = torch.sigmoid(self.w2)
+        out = torch.cat((xprob0 * x0, 
+                         xprob1 * x1, 
+                         xprob2 * x2), dim=-1)
+        xprob = torch.cat((xprob0, xprob1, xprob2), dim=-1)
 
-        return xprob * x, xprob.cpu().detach().numpy()
+        return out, xprob.cpu().detach().numpy()
 
 
 class NetMLP(SaveableNNModule):
@@ -434,7 +449,7 @@ class NetMLP(SaveableNNModule):
         else:
             x_prob = None
 
-        x1 = F.relu(self.fc1(x))
+        x1 = F.relu(self.fc1(x), inplace=False)
         x2 = self.fc2(x1)
 
         return x2, x_prob

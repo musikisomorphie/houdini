@@ -174,7 +174,7 @@ def get_task_settings(data_dict,
             epochs=8,
             synthesizer=synthesizer,
             dbg_learn_parameters=dbg_learn_parameters,
-            learning_rate=0.02,
+            learning_rate=0.02 ,
             data_dict=data_dict)
     return task_settings
 

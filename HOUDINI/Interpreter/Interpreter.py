@@ -62,16 +62,19 @@ class Interpreter:
         Creates the NN functions.
         :return: a tuple: ({fn_name: NN_Object}, trainable_parameters)
         """
-        trainable_parameters = []
-        new_fns_dict = {}
+        trainable_parameters = {'do': list(),
+                                'non-do': list()}
+        new_fns_dict = dict()
         for uf in unknown_fns:
             new_fns_dict[uf["name"]
                          ], c_trainable_params = NN.get_nn_from_params_dict(uf)
             if "freeze" in uf and uf["freeze"]:
                 print("freezing the weight of {}".format(uf["name"]))
                 continue
-            trainable_parameters += list(c_trainable_params)
-
+            if uf['type'] == 'DO':
+                trainable_parameters['do'] += list(c_trainable_params)
+            else:
+                trainable_parameters['non-do'] += list(c_trainable_params)
         return new_fns_dict, trainable_parameters
 
     def _get_data_loader(self, io_examples):
@@ -288,10 +291,10 @@ class Interpreter:
                                                 only_inputs=True)[0]
                 cox_grads = cox_grads.cpu().detach().numpy()
                 cox_grads = np.squeeze(cox_grads)
-                return perform_metric, cox_scores, cox_grads
+                return perform_metric, cox_scores, cox_grads, prob_all
         else:
             perform_metric = accuracy
-        return perform_metric, np.inf, np.inf
+        return perform_metric, np.inf, np.inf, np.inf
 
     def _clone_hidden_state(self, state):
         result = OrderedDict()
@@ -307,7 +310,10 @@ class Interpreter:
                               data_loader_tr: NumpyDataSetIterator,
                               data_loader_val: NumpyDataSetIterator,
                               data_loader_test: NumpyDataSetIterator):
-        if trainable_parameters is not None and trainable_parameters.__len__() == 0:
+        parm_all = trainable_parameters['do'] + trainable_parameters['non-do']
+        # parm_all = trainable_parameters['non-do']
+        parm_do = trainable_parameters['do']
+        if not parm_all:
             print(
                 "Warning! learn_neural_network_ called, with no learnable parameters! returning -inf accuracy.")
             return new_fns_dict, -sys.float_info.max, 0.0001
@@ -321,8 +327,14 @@ class Interpreter:
             # combines log_softmax and cross-entropy
             criterion = F.cross_entropy
 
-        optimizer = torch.optim.Adam(
-            trainable_parameters, lr=self.lr, weight_decay=0.001)
+        optim_all = torch.optim.Adam(parm_all,
+                                     lr=self.lr,
+                                     weight_decay=0.001)
+
+        if parm_do:
+            optim_do = torch.optim.Adam(parm_do,
+                                        lr=self.lr,
+                                        weight_decay=0.001)
 
         # data_loader_tr is either a dataloader or a list of dataloaders
         if issubclass(type(data_loader_tr), NumpyDataSetIterator):
@@ -377,17 +389,29 @@ class Interpreter:
                 #         y_pred = torch.cat(y_pred, dim=2)
                 #     y_pred = y_pred[:, 1, :, :]
                 if type(y_pred) == tuple:
+                    y_pred = y_pred[0]
                     # if it's a tuple, then its (output_logits, output)
-                    loss = criterion(y_pred[0], y)
-                else:
+                #     loss = criterion(y_pred[0], y)
+                # else:
                     # print(y.max())
                     # print(y_pred.data.shape)
-                    loss = criterion(y_pred, y)
                 #print("loss:", loss.data[0])
                 # Zero gradients, perform a backward pass, and update the weights.
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+                loss = criterion(y_pred, y)
+                # print(parm_do)
+                y_pred0, y_pred1 = torch.split(y_pred, y_pred.shape[0] // 2, dim=0)
+                y0, y1 = torch.split(y, y.shape[0] // 2, dim=0)
+                loss_do = torch.abs(criterion(y_pred0, y0) - criterion(y_pred1, y1)) 
+                optim_all.zero_grad()
+                # if parm_do:
+                #     optim_do.zero_grad()
+                loss.backward(retain_graph=True)
+                # if parm_do:
+                #     # print(loss_do)
+                #     loss_do.backward()
+                optim_all.step()
+                # if parm_do:
+                #     optim_do.step()
 
                 if current_iteration % evaluate_every_n_iters == 0 or (epoch == self.epochs-1 and current_iteration == num_iterations-1):
                     # set all new functions to eval mode
@@ -484,6 +508,7 @@ class Interpreter:
         new_fns_dict = {}
         val_accuracy, test_accuracy = list(), list()
         cox_scores, cox_grads = list(), list()
+        probs = list()
         repeat = self.data_dict['repeat']
         is_lganm = self.data_dict['dict_name'].lower() == 'lganm'
         for _ in range(repeat):
@@ -514,6 +539,8 @@ class Interpreter:
             if output_type == ProgramOutputType.HAZARD:
                 cox_scores.append(val_acc[1])
                 cox_grads.append(val_acc[2])
+                probs.append(val_acc[3])
+
 
         val_accuracy = sum(val_accuracy) / len(val_accuracy)
         test_accuracy = sum(test_accuracy) / len(test_accuracy)
@@ -529,6 +556,10 @@ class Interpreter:
                                pathlib.Path(cox_dir),
                                self.data_dict['metric_scores'])
             print(cox_utils.summary(pathlib.Path(cox_dir)))
+            probs = np.concatenate(probs, axis=0)
+            print('mean {}'.format(np.mean(probs, axis=0)))
+            print('var {}'.format(np.var(probs, axis=0)))
+
         print("validation accuracy=", val_accuracy)
         print("test accuracy=", test_accuracy)
         return {"accuracy": val_accuracy, "new_fns_dict": new_fns_dict,
