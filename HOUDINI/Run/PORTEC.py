@@ -164,9 +164,9 @@ def get_task_settings(data_dict,
             data_dict=data_dict)
     else:
         task_settings = TaskSettings(
-            train_size=128,
-            val_size=128,
-            batch_size=128,
+            train_size=64,
+            val_size=64,
+            batch_size=64,
             training_percentages=[100],
             N=200,
             M=1,
@@ -230,7 +230,7 @@ def parse_args():
                         help='path to the visualization folder')
     parser.add_argument('--repeat',
                         type=int,
-                        default=32,
+                        default=8,
                         help='num of repeated experiments')
     args = parser.parse_args()
 
@@ -260,7 +260,8 @@ if __name__ == '__main__':
                    'file': args.dt_file,
                    'repeat': args.repeat,
                    'mid_size': mid_size,
-                   'out_type': 'hazard'}
+                   'out_type': 'hazard',
+                   'env_num': 2}
     portec_dict.update(portec_parm)
 
     # portec_dict.update({'dict_name': 'portec'})

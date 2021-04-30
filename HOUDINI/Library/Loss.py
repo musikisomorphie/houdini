@@ -8,6 +8,7 @@ import math
 
 def cox_ph_loss_sorted(log_h: Tensor,
                        events: Tensor,
+                       reduction: str = 'none',
                        eps: float = 1e-7) -> Tensor:
     """Requires the input to be sorted by descending duration time.
     See DatasetDurationSorted.
@@ -22,13 +23,17 @@ def cox_ph_loss_sorted(log_h: Tensor,
     log_h = log_h.view(-1)
     gamma = log_h.max()
     log_cumsum_h = log_h.sub(gamma).exp().cumsum(0).add(eps).log().add(gamma)
-    return - log_h.sub(log_cumsum_h).mul(events).sum().div(events.sum())
+    if reduction == 'none':
+        return - log_h.sub(log_cumsum_h).mul(events)
+    else:
+        return - log_h.sub(log_cumsum_h).mul(events).sum().div(events.sum())
 
 
 def cox_ph_loss(log_h: Tensor,
                 event_dur: Tensor,
                 # events: Tensor,
                 # durations: Tensor,
+                reduction: str = 'none',
                 eps: float = 1e-7) -> Tensor:
     """Loss for CoxPH model. If data is sorted by descending duration, see `cox_ph_loss_sorted`.
     We calculate the negative log of $(\frac{h_i}{\sum_{j \in R_i} h_j})^d$,
@@ -43,4 +48,4 @@ def cox_ph_loss(log_h: Tensor,
     idx = durations.sort(descending=True)[1]
     events = events[idx]
     log_h = log_h[idx]
-    return cox_ph_loss_sorted(log_h, events, eps)
+    return cox_ph_loss_sorted(log_h, events, reduction, eps)

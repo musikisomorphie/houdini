@@ -4,9 +4,9 @@ from typing import NamedTuple, List, Dict
 
 from HOUDINI.Run.Utils import mk_tag, write_to_file, append_to_file
 from HOUDINI.Run.Task import Task, TaskResult, TaskResultSingle
-from HOUDINI.Library.NN import NetCNN, SaveableNNModule
 from HOUDINI.Library.FnLibrary import FnLibrary, PPLibItem
 from HOUDINI.Library.OpLibrary import OpLibrary
+from HOUDINI.Library.Utils import NNUtils
 from HOUDINI.Synthesizer.Utils import ASTUtils
 from HOUDINI.Synthesizer.AST import PPSort
 from HOUDINI.Synthesizer.Utils.MiscUtils import createDir
@@ -68,7 +68,7 @@ class TaskSeq:
         NNList, OpList = [], []
         for name, (li, isNN) in libDict.items():
             if isNN:
-                obj = SaveableNNModule.create_and_load(libDirPath, name)
+                obj = NNUtils.create_and_load(libDirPath, name)
                 NNList.append(PPLibItem(name, li, obj))
             else:
                 OpList.append(name)
@@ -128,13 +128,13 @@ class TaskSeq:
         # print("FINISHED THE TASK. HERE's the cpu status")
         # TaskSeq.cpuStats()
 
-        print("Saving Library")
-        last_task_result = task_result.results[-1]
-        self.update_library(task.seq.lib, last_task_result, id)
+        # print("Saving Library")
+        # last_task_result = task_result.results[-1]
+        # self.update_library(task.seq.lib, last_task_result, id)
 
-        print("Appending to the report")
+        # print("Appending to the report")
         # self.save_results(task, task_result)
-        self.append_to_the_report(id, task_result)
+        # self.append_to_the_report(id, task_result)
 
     def append_to_the_report(self, task_id, task_result):
         seq_dir = self.get_seq_dir()

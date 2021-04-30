@@ -1,8 +1,10 @@
 import numpy as np
 import math
+import random
 import pyreadstat
 import pickle
-from pathlib import Path
+import pathlib
+import itertools
 from typing import List, Dict, Tuple
 from matplotlib import pyplot as plt
 from Data.DataGenerator import NumpyDataSetIterator, ListNumpyDataSetIterator
@@ -94,10 +96,12 @@ def get_portec_io_examples(portec_file,
         portec.append(df_ptc)
         max_len = max(max_len, df_ptc.shape[0])
 
-    for ptc in portec:
+    for ptc_id, ptc in enumerate(portec):
         ptc = pad_array(ptc, max_len)
         df_input.append(ptc[:, :-len(label)])
         df_lab.append(ptc[:, -len(label):])
+        # df_input[-1][:, -1] = ptc_id
+        df_lab[-1][:, -1] = ptc_id
 
     df_trn = (np.stack(df_input, 1),
               np.stack(df_lab, 1))
@@ -106,51 +110,47 @@ def get_portec_io_examples(portec_file,
     return df_trn, df_val, df_tst
 
 
-def get_lganm_io_examples(lganm_envs,
-                          parents,
-                          outcome,
-                          dt_dim,
-                          trn_batch,
-                          val_batch,
-                          tst_batch):
+def get_lganm_io_examples(lganm_envs: Dict,
+                          parents: List[int],
+                          outcome: int,
+                          dt_dim: int,
+                          max_len: int=4096) -> Tuple[Tuple, Tuple, Tuple]:
+    """Obtain the lganm data 
 
-    max_len = 0
+    Args:
+        lganm_envs: dict storing the lganm data 
+            collected from different environments
+        parents: the parents (ground-truth) of the outcome var
+        outcome: outcome variable
+        dt_dim: the data feature dimension including 
+            candidate causal and outcome variable(s)
+        max_len: the maximum number of data in each env
+
+    Returns:
+        the train, val, test lganm data 
+    """
+
+    if max_len is None:
+        max_len = 0
+        for env in lganm_envs:
+            max_len = max(max_len, env.shape[0])
+
     dt_input, dt_lab = list(), list()
     msk = np.ones(dt_dim, dtype=bool)
     msk[outcome] = False
-    for env in lganm_envs:
-        max_len = max(max_len, env.shape[0])
-
-    for env in lganm_envs:
-        env = pad_array(env, max_len)
+    for env_id, env in enumerate(lganm_envs):
+        print(env.shape)
+        if env.shape[0] < max_len:
+            env = pad_array(env, max_len)
+        else:
+            env = env[:max_len]
         dt_input.append(env[:, msk])
         dt_lab.append(env[:, ~msk])
+        # dt_lab[-1][:]= env_id
 
     dt_trn = (np.stack(dt_input, 1),
               np.stack(dt_lab, 1))
     dt_val, dt_tst = dt_trn, dt_trn
-
-    # dt = np.concatenate(lganm_envs, axis=1)
-    # msk = np.ones(dt.shape[1], dtype=bool)
-    # outs = list(range(outcome, msk.shape[0], dt_dim))
-    # msk[outs] = False
-    print(msk, dt_trn[1].shape)
-    # input_dim = dt_dim - 1
-    # dt_trn = ListNumpyDataSetIterator(input_dim,
-    #                                   dt[:, msk],
-    #                                   dt[:, ~msk],
-    #                                   trn_batch)
-    # dt_val = ListNumpyDataSetIterator(input_dim,
-    #                                   dt[:, msk],
-    #                                   dt[:, ~msk],
-    #                                   val_batch)
-    # dt_tst = ListNumpyDataSetIterator(input_dim,
-    #                                   dt[:, msk],
-    #                                   dt[:, ~msk],
-    #                                   tst_batch)
-    # print(msk, ~msk)
-    # print(dt_trn[0].shape, dt_trn[1].shape)
-    # dt_val, dt_tst = dt_trn, dt_trn
     return dt_trn, dt_val, dt_tst
 
 
@@ -162,8 +162,9 @@ def sav_to_csv(sav_file,
 
 def prep_sav(sav_file):
     df, meta = pyreadstat.read_sav(str(sav_file))
-
-    df['log2_id'] = np.log2(df.index.astype('int64') + 1)
+    df_ind = (df.index.astype('int64') + 1).tolist()
+    random.shuffle(df_ind)
+    df['log2_id'] = np.log2(df_ind)
     df['POLE'] = df['TCGA_4groups']
     df.loc[df['POLE'] == 1, 'POLE'] = 1
     df.loc[df['POLE'] == 2, 'POLE'] = 0
@@ -198,11 +199,65 @@ def prep_sav(sav_file):
     df.to_csv(str(new_csv))
 
 
+def load_pickle(path):
+    with open(path, 'rb') as apath:
+        dt_dict = pickle.load(apath)
+    return dt_dict
+
+
+def compute_aicp_results(path):
+    with open(path, 'rb') as apath:
+        aicp = pickle.load(apath)
+    aicp_cases = aicp[0]
+    aicp_results = list(itertools.chain.from_iterable(aicp[1]))
+
+    repeat = len(aicp_results) // len(aicp_cases)
+    jacobs = list()
+    fwer = list()
+    is_false = 0
+    for aicp_idx, aicp_res in enumerate(aicp_results):
+        case_idx = aicp_idx // repeat
+        parents = set(aicp_cases[case_idx].truth)
+        par_aicp = set(aicp_res.estimate)
+        jacob = len(parents.intersection(par_aicp)) / \
+            len(parents.union(par_aicp))
+        jacobs.append(jacob)
+        fwer.append(not par_aicp.issubset(parents))
+
+        if parents != par_aicp:
+            is_false += 1
+
+    print(sum(jacobs) / len(jacobs))
+    print(sum(fwer) / len(fwer))
+    print(is_false)
+
+    # for aicp_id, aicp_case in enumerate(aicp_cases):
+    #     if aicp_id >= 10:
+    #         break
+    #     print(aicp_case.target, aicp_case.truth)
+    # for aicp_id, aicp_res in enumerate(aicp_results):
+    #         for res_id, res in enumerate(aicp_res):
+    #             if res_id <= 10:
+    #                 print(res.estimate)
+    #                 # break
+
+    return aicp
+
+
 def main():
-    sav_file = Path('/home/histopath/Data/PORTEC/PORTEC12-1-2-21.sav')
+    # sav_file = Path('/home/histopath/Data/PORTEC/PORTEC12-1-2-21.sav')
     # csv_file = sav_file.with_suffix('.csv')
     # sav_to_csv(sav_file, csv_file)
-    prep_sav(sav_file)
+    # prep_sav(sav_file)
+    # pkl_path = pathlib.Path(
+    #     '/home/histopath/Model/LGANM/Results/fin/n_1000_res.pickle')
+    # res_dict = load_pickle(pkl_path)
+    # print(sum(res_dict['jacob']) / len(res_dict['jacob']))
+    # print(sum(res_dict['fwer']) / len(res_dict['fwer']))
+    # print(res_dict['error'])
+    # print(len(res_dict['jacob']))
+    aicp_path = pathlib.Path('/home/histopath/Data/LGANM/fin/n_1000.pickle')
+    aicp_tests = compute_aicp_results(aicp_path)
 
 
 if __name__ == '__main__':

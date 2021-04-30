@@ -15,36 +15,7 @@ PPLibItem = NamedTuple('PPLibItem', [('name', str),
 class FnLibrary:
     def __init__(self):
         self.items: Dict[str, PPLibItem] = {}
-        # self._add_python_fns()
-
-    # def save(self, location):
-    #     """
-    #     Saves the neural networks if already not on disk.
-    #     Saves the name-sort dictionary to lib.pickle
-    #     """
-
-    #     def isNN(anObj):
-    #         return issubclass(type(anObj), nn.Module)
-
-    #     if not os.path.exists(location):
-    #         createDir(location)
-
-    #     for name, li in self.items.items():
-    #         if isNN(li.obj):
-    #             nnFileName = location + '/' + name + '.pth'
-    #             if not os.path.isfile(nnFileName):
-    #                 createDir(location)
-    #                 li.obj.save(location)
-    #         else:
-    #             pass
-
-    #     newDict = {}
-    #     for name, li in self.items.items():
-    #         newDict[name] = (li.sort, isNN(li.obj))
-
-    #     with open(location + '/lib.pickle', 'wb') as fh:
-    #         pickle.dump(newDict, fh, protocol=pickle.HIGHEST_PROTOCOL)
-
+      
     def save(self, location, id):
         """
         Saves the neural networks if already not on disk.

@@ -1,12 +1,15 @@
+
+import math
+import json
+import os
+import numpy
+from abc import abstractmethod
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import math
-from abc import abstractmethod
-import json
-import os
-import numpy
+
+# from HOUDINI.Library.Utils import NNUtils
 
 
 class SaveableNNModule(nn.Module):
@@ -46,31 +49,6 @@ class SaveableNNModule(nn.Module):
             f = open("{}/{}.json".format(directory, self.name), "w")
             f.write(jsond)
             f.close()
-
-    @staticmethod
-    def create_and_load(directory, name, new_name=None):
-        if new_name is None:
-            new_name = name
-
-        with open('{}/{}.json'.format(directory, name)) as json_data:
-            params_dict = json.load(json_data)
-            params_dict["name"] = new_name
-
-            if params_dict["output_activation"] == "None":
-                params_dict["output_activation"] = None
-            elif params_dict["output_activation"] == "sigmoid":
-                params_dict["output_activation"] = torch.sigmoid
-            elif params_dict["output_activation"] == "softmax":
-                params_dict["output_activation"] = nn.Softmax(dim=1)
-            else:
-                raise NotImplementedError
-
-        new_fn, _ = get_nn_from_params_dict(params_dict)
-        # print(new_name)
-        # new_fn = new_fn_dict[new_name]
-        new_fn.load("{}/{}.pth".format(directory, name))
-        new_fn.eval()
-        return new_fn
 
 
 class NetCNN(SaveableNNModule):
@@ -116,79 +94,6 @@ class NetCNN(SaveableNNModule):
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
         return x
-
-
-class NetMLP1(SaveableNNModule):
-    def __init__(self, name, input_dim, output_dim, output_activation=None, hidden_layer=True):
-        """
-        :param
-        :param output_activation: [None, F.softmax, torch.sigmoid]
-        """
-        super(NetMLP1, self).__init__()
-        self.output_dim = output_dim
-        self.name = name
-        self.output_activation = output_activation
-        self.hidden_layer = hidden_layer
-        # fc1_size = 300
-        if self.hidden_layer:
-            fc1_size = input_dim
-            self.fc1 = nn.Linear(input_dim, fc1_size)
-            self.bn1 = nn.BatchNorm1d(fc1_size)
-
-        if self.output_dim is not None:
-            if self.hidden_layer:
-                self.fc2 = nn.Linear(fc1_size, output_dim, bias=False)
-            else:
-                self.fc2 = nn.Linear(input_dim, output_dim, bias=False)
-
-    def forward(self, x, x1=None):
-        if type(x) == tuple:
-            x = x[1]
-        if list(x.shape).__len__() == 4:  # if it's 2d, flatten to 1d
-            x = x.view(x.shape[0], -1)
-
-        # If one of the inputs (x or x1) is a constant, we enlargen it to [batch_size, _], so that it can be concatenated
-        if x1 is not None:
-            if type(x1) == tuple:
-                x1 = x1[1]
-
-            dim0_x = x.shape[0]
-            dim0_x1 = x1.shape[0]
-            dim0 = max((dim0_x, dim0_x1))
-
-            if dim0_x == 1 and dim0 > 1:
-                dim1_x = x.shape[1]
-                # dim1_x = 128
-                new = torch.ones((dim0, dim1_x))
-                new = Variable(new).cuda(
-                ) if torch.cuda.is_available() else Variable(new)
-                x = new*x
-
-            if dim0_x1 == 1 and dim0 > 1:
-                dim1_x1 = x1.shape[1]
-                new = torch.ones((dim0, dim1_x1))
-                new = Variable(new).cuda(
-                ) if torch.cuda.is_available() else Variable(new)
-                x1 = new * x1
-
-            # x1.shape[0] == 1
-
-            x = torch.cat((x, x1), dim=1)
-
-        # FC Layer 1
-        if self.hidden_layer:
-            x = F.relu(self.fc1(x))
-            # x = self.bn1(x)
-            # x = F.dropout(x, training=self.training)
-
-        # FC Layer 2
-        if self.output_dim is not None:
-            x_logits = self.fc2(x)
-            # output = x_logits if self.output_activation is None else self.output_activation(
-            #     x_logits)
-            return x_logits
-        else:
-            return x
 
 
 class NetRNN(SaveableNNModule):
@@ -274,121 +179,11 @@ class NetRNN(SaveableNNModule):
         return outputs
 
 
-class NetGRAPHNew(SaveableNNModule):
-    def __init__(self, name, output_activation=None, input_ch=2, num_output_channels=100):
-        """
-        :param output_activation: [None, F.softmax, torch.sigmoid]
-        """
-        super(NetGRAPHNew, self).__init__()
-
-        self.name = name
-        self.output_activation = output_activation
-
-        noch = num_output_channels
-
-        self.conv1 = nn.Conv2d(in_channels=input_ch,
-                               out_channels=noch, kernel_size=3, padding=1)
-        # set the corner weights to 0
-        self.nullify_3d_corners(self.conv1.weight.data)
-        # do the same for every gradient
-        self.conv1.weight.register_hook(self.nullify_3d_corners)
-
-        self.conv2 = nn.Conv2d(
-            in_channels=noch, out_channels=noch, kernel_size=1, padding=0)
-        self.conv3 = nn.Conv2d(
-            in_channels=noch, out_channels=noch, kernel_size=1, padding=0)
-        self.conv4 = nn.Conv2d(
-            in_channels=noch, out_channels=noch, kernel_size=1, padding=0)
-        self.conv5 = nn.Conv2d(
-            in_channels=noch, out_channels=noch, kernel_size=1, padding=0)
-        self.conv6 = nn.Conv2d(
-            in_channels=noch, out_channels=1, kernel_size=1, padding=0)
-
-    def forward(self, graph):
-        # if x is a 2d list, convert it to a variable
-        if type(graph) == list:
-            # check if it's a list of tuples
-            if graph.__len__() > 0 and type(graph[0]) == list \
-                    and type(graph[0][0]) == tuple:
-                # graph = [i[1] for i in graph]
-                graph = [[j[1] for j in i] for i in graph]
-
-            if graph.__len__() > 0 and type(graph[0]) == list:
-                # concatenate all along cols
-                graph = [[torch.unsqueeze(j, dim=2) for j in i] for i in graph]
-                graph = [torch.cat(i, dim=2) for i in graph]
-
-                # concatenate along rows
-                graph = [torch.unsqueeze(a, dim=2) for a in graph]
-                graph = torch.cat(graph, dim=2)
-        elif type(graph) == tuple:
-            graph = graph[1]
-
-        speeds = torch.unsqueeze(graph[:, 0, :, :], dim=1)
-
-        x = F.relu(self.conv1(graph))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
-        x = F.relu(self.conv4(x))
-        x = F.relu(self.conv5(x))
-        x = self.conv6(x)
-        if self.output_activation is not None:
-            x = self.output_activation(x)
-        graph_values = x
-
-        output = torch.cat((speeds, graph_values), dim=1)
-
-        return torch.squeeze(graph_values), output
-
-    @staticmethod
-    def nullify_3d_corners(gradient):
-        gradient[:, :, 0, 0] = 0
-        gradient[:, :, 2, 2] = 0
-        gradient[:, :, 0, 2] = 0
-        gradient[:, :, 2, 0] = 0
-
-
-def get_nn_from_params_dict(uf):
-    new_nn = None
-    if uf['type'] == 'MLP':
-        new_nn = NetMLP(uf['name'],
-                        uf['input_dim'],
-                        uf['output_dim'],
-                        uf['bias'])
-    elif uf['type'] == 'DO':
-        new_nn = NetDO(uf['name'],
-                       uf['input_dim'])
-    # elif uf["type"] == "CNN":
-    #     new_nn = NetCNN(uf["name"], uf["input_dim"], uf["input_ch"])
-    # elif uf["type"] == "RNN":
-    #     output_dim = uf["output_dim"] if "output_dim" in uf else None
-    #     output_activation = uf["output_activation"] if "output_activation" in uf else None
-    #     output_sequence = uf["output_sequence"] if "output_sequence" in uf else False
-    #     new_nn = NetRNN(uf["name"], uf["input_dim"], uf["hidden_dim"],
-    #                     output_dim=output_dim, output_activation=output_activation,
-    #                     output_sequence=output_sequence)
-    # elif uf["type"] == "GCONVNew":
-    #     new_nn = NetGRAPHNew(
-    #         uf["name"], None, uf["input_dim"], num_output_channels=100)
-    else:
-        raise NotImplementedError()
-
-    if "initialize_from" in uf and uf["initialize_from"] is not None:
-        new_nn.load(uf["initialize_from"])
-
-    if torch.cuda.is_available():
-        new_nn.cuda()
-
-    new_nn.params_dict = uf
-    c_trainable_parameters = list(new_nn.parameters())
-
-    return new_nn, c_trainable_parameters
-
-
 class NetDO(SaveableNNModule):
     def __init__(self,
                  name,
-                 input_dim):
+                 input_dim,
+                 dt_name):
         """
         :param
         :param output_activation: [None, F.softmax, torch.sigmoid]
@@ -396,31 +191,38 @@ class NetDO(SaveableNNModule):
         super(NetDO, self).__init__()
         self.name = name
         self.input_dim = input_dim
+        self.dt_name = dt_name
 
         self.fc1 = nn.Linear(input_dim, input_dim)
         self.fc2 = nn.Linear(input_dim, input_dim)
         self.drop1 = nn.Dropout(0.2)
-        self.w0 = nn.Parameter(data=torch.zeros(
+        self.cau_wei = nn.Parameter(data=torch.zeros(
+            1, input_dim), requires_grad=True)
+        self.cau_wei0 = nn.Parameter(data=torch.zeros(
             1, input_dim - 5), requires_grad=True)
-        self.w1 = nn.Parameter(data=torch.zeros(
+        self.cau_wei1 = nn.Parameter(data=torch.zeros(
             1, 1), requires_grad=True)
-        self.w2 = nn.Parameter(data=torch.zeros(
+        self.cau_wei2 = nn.Parameter(data=torch.zeros(
             1, 1), requires_grad=True)
 
     def forward(self, x):
         if type(x) == tuple:
             x = x[0]
 
-        x0, x1, x2 = torch.split(x, [self.input_dim - 5, 3, 2], dim=-1)
-        # x1 = F.leaky_relu(self.fc1(x), inplace=False)
-        # xprob = torch.sigmoid(x1)
-        xprob0 = torch.sigmoid(self.w0) 
-        xprob1 = torch.sigmoid(self.w1)
-        xprob2 = torch.sigmoid(self.w2)
-        out = torch.cat((xprob0 * x0, 
-                         xprob1 * x1, 
-                         xprob2 * x2), dim=-1)
-        xprob = torch.cat((xprob0, xprob1, xprob2), dim=-1)
+        if self.dt_name.lower() != 'portec':
+            xprob = torch.sigmoid(self.cau_wei)
+            out = xprob * x
+        else:
+            x0, x1, x2 = torch.split(x, [self.input_dim - 5, 3, 2], dim=-1)
+            # x1 = F.leaky_relu(self.fc1(x), inplace=False)
+            # xprob = torch.sigmoid(x1)
+            xprob0 = torch.sigmoid(self.cau_wei0) ** 2
+            xprob1 = torch.sigmoid(self.cau_wei1) ** 2
+            xprob2 = torch.sigmoid(self.cau_wei2) ** 2
+            out = torch.cat((xprob0 * x0,
+                             xprob1 * x1,
+                             xprob2 * x2), dim=-1)
+            xprob = torch.cat((xprob0, xprob1, xprob2), dim=-1)
 
         return out, xprob.cpu().detach().numpy()
 
@@ -442,6 +244,7 @@ class NetMLP(SaveableNNModule):
 
         self.fc1 = nn.Linear(input_dim, input_dim)
         self.fc2 = nn.Linear(input_dim, output_dim, bias=bias)
+        self.fc = nn.Linear(input_dim, output_dim, bias=bias)
 
     def forward(self, x):
         if type(x) == tuple:
@@ -449,7 +252,6 @@ class NetMLP(SaveableNNModule):
         else:
             x_prob = None
 
-        x1 = F.relu(self.fc1(x), inplace=False)
-        x2 = self.fc2(x1)
+        x1 = self.fc(x)
 
-        return x2, x_prob
+        return x1, x_prob
