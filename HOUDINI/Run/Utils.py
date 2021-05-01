@@ -114,7 +114,7 @@ def get_lganm_io_examples(lganm_envs: Dict,
                           parents: List[int],
                           outcome: int,
                           dt_dim: int,
-                          max_len: int=4096) -> Tuple[Tuple, Tuple, Tuple]:
+                          max_len: int=8192) -> Tuple[Tuple, Tuple, Tuple]:
     """Obtain the lganm data 
 
     Args:
@@ -130,10 +130,11 @@ def get_lganm_io_examples(lganm_envs: Dict,
         the train, val, test lganm data 
     """
 
-    if max_len is None:
-        max_len = 0
-        for env in lganm_envs:
-            max_len = max(max_len, env.shape[0])
+    # if max_len is None:
+    # mlen = 0
+    # for env in lganm_envs:
+    #     mlen = max(mlen, env.shape[0])
+    # max_len = min(mlen, max_len)
 
     dt_input, dt_lab = list(), list()
     msk = np.ones(dt_dim, dtype=bool)

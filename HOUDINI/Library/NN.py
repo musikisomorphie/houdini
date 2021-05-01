@@ -244,7 +244,9 @@ class NetMLP(SaveableNNModule):
 
         self.fc1 = nn.Linear(input_dim, input_dim)
         self.fc2 = nn.Linear(input_dim, output_dim, bias=bias)
-        self.fc = nn.Linear(input_dim, output_dim, bias=bias)
+        self.fc = nn.Linear(input_dim, output_dim, bias=False)
+        # self.fc = nn.Parameter(data=torch.ones(
+            # 1, input_dim), requires_grad=True)
 
     def forward(self, x):
         if type(x) == tuple:

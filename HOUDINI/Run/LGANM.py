@@ -315,12 +315,14 @@ if __name__ == '__main__':
         wrong_list = list()
 
         pkl_dir = args.lganm_dir / exp / 'n_1000'
-        # print(pkl_dir, len(list(pkl_dir.glob('*.pickle'))))
+        print(pkl_dir, len(list(pkl_dir.glob('*.pickle'))))
         for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
-            if pkl_id > 0:
+            if pkl_id > 200:
                 continue
-            # print('{} {} experiment id: {}'.format(exp, pkl_id, pkl_file.stem))
-            pkl_file = args.lganm_dir / exp / 'n_1000' / '54.pickle'
+        # for pkl_id in ['218', '213', '387', '214', '53', '52', '219', '98', '385', '121',
+        #     '220', '185', '96', '384', '108', '97', '55', '386', '123', '54']:
+        #     # print('{} {} experiment id: {}'.format(exp, pkl_id, pkl_file.stem))
+        #     pkl_file = args.lganm_dir / exp / 'n_1000' / '{}.pickle'.format(pkl_id)
             with open(str(pkl_file), 'rb') as pl:
                 lganm_dict = pickle.load(pl)
                 lganm_parm = {'dict_name': 'lganm',
@@ -346,12 +348,12 @@ if __name__ == '__main__':
                         if key not in ('error', 'id'):
                             res_dict[key].append(lganm_dict[key])
                     res_dict['id'].append(pkl_file.stem)
-                    print(res_dict['accept'], res_dict['truth'], res_dict['target'])
+                    # print(res_dict['accept'], res_dict['truth'], res_dict['target'])
 
         # pkl_nm = pathlib.Path(settings['results_dir']) / 'n_1000_res.pickle'
         # with open(str(pkl_nm), 'wb') as pl:
         #     pickle.dump(res_dict, pl)
 
-        # print(sum(mean_fwer) / len(mean_fwer))
-        # print(sum(mean_jacob) / len(mean_jacob))
-        # print(res_dict['error'])
+        print(sum(mean_fwer) / len(mean_fwer))
+        print(sum(mean_jacob) / len(mean_jacob))
+        print(res_dict['error'])

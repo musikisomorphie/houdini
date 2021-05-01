@@ -366,6 +366,10 @@ class Interpreter:
                 if type(y_pred) == tuple:
                     y_pred = y_pred[0]
 
+                # wei = torch.ones(11 * 64, requires_grad=False).cuda()
+                # wei[10:64 :11*64] = 0.1
+
+                # loss = wei * criterion(y_pred, y)
                 loss = criterion(y_pred, y)
                 optim_all.zero_grad()
                 (loss.mean()).backward(retain_graph=True)
