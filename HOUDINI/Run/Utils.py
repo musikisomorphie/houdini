@@ -114,7 +114,7 @@ def get_lganm_io_examples(lganm_envs: Dict,
                           parents: List[int],
                           outcome: int,
                           dt_dim: int,
-                          max_len: int=8192) -> Tuple[Tuple, Tuple, Tuple]:
+                          max_len: int=6000) -> Tuple[Tuple, Tuple, Tuple]:
     """Obtain the lganm data 
 
     Args:
