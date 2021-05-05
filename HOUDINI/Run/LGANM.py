@@ -266,7 +266,7 @@ def parse_args():
                         metavar='DIR',
                         help='path to the visualization folder')
     parser.add_argument('--exp',
-                        choices=['fin', 'int_srt', 'abcd'],
+                        choices=['fin', 'abcd'],
                         default='fin',
                         help='Experimental settings defined in AICP. (default: %(default)s)')
     parser.add_argument('--repeat',
@@ -279,81 +279,80 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    # python -m HOUDINI.Run.LGANM --repeat 1
+    # python -m HOUDINI.Run.LGANM --repeat 1 --exp fin
     args = parse_args()
 
-    for exp in ('abcd',):
-        settings = {'results_dir': str(args.lganm_dir / 'Results'),
-                    # If False, the interpreter doesn't learn the new parameters
-                    'dbg_learn_parameters': True,
-                    # enumerative, evolutionary
-                    'synthesizer': args.synthesizer,
-                    'seq_string': 'idef'}
-        settings['results_dir'] += exp
-        pathlib.Path(settings['results_dir']).mkdir(
-            parents=True, exist_ok=True)
+    settings = {'results_dir': str(args.lganm_dir / 'Results'),
+                # If False, the interpreter doesn't learn the new parameters
+                'dbg_learn_parameters': True,
+                # enumerative, evolutionary
+                'synthesizer': args.synthesizer,
+                'seq_string': 'idef'}
+    settings['results_dir'] += args.exp
+    pathlib.Path(settings['results_dir']).mkdir(
+        parents=True, exist_ok=True)
 
-        res_dict = {'id': list(),
-                    'reject': list(),
-                    'accept': list(),
-                    'target': list(),
-                    'truth': list(),
-                    'grads': list(),
-                    'likelihood': list(),
-                    'jacob': list(),
-                    'fwer': list(),
-                    'error': list()}
+    res_dict = {'id': list(),
+                'reject': list(),
+                'accept': list(),
+                'target': list(),
+                'truth': list(),
+                'grads': list(),
+                'likelihood': list(),
+                'jacob': list(),
+                'fwer': list(),
+                'error': list()}
 
-        seq_info_dict = get_seq_info(settings['seq_string'])
-        additional_prefix = '_np_{}'.format(
-            'td' if settings['synthesizer'] == 'enumerative' else 'ea')
-        prefixes = ['{}{}'.format(prefix, additional_prefix)
-                    for prefix in seq_info_dict['prefixes']]
+    seq_info_dict = get_seq_info(settings['seq_string'])
+    additional_prefix = '_np_{}'.format(
+        'td' if settings['synthesizer'] == 'enumerative' else 'ea')
+    prefixes = ['{}{}'.format(prefix, additional_prefix)
+                for prefix in seq_info_dict['prefixes']]
 
-        mean_jacob = list()
-        mean_fwer = list()
-        wrong_list = list()
+    mean_jacob = list()
+    mean_fwer = list()
+    wrong_list = list()
 
-        pkl_dir = args.lganm_dir / exp / 'n_1000'
-        print(pkl_dir, len(list(pkl_dir.glob('*.pickle'))))
-        for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
-            if pkl_id > 400:
-                continue
-        # for pkl_id in ['218', '213', '387', '214', '53', '52', '219', '98', '385', '121',
-        #     '220', '185', '96', '384', '108', '97', '55', '386', '123', '54']:
-        #     # print('{} {} experiment id: {}'.format(exp, pkl_id, pkl_file.stem))
-        #     pkl_file = args.lganm_dir / exp / 'n_1000' / '{}.pickle'.format(pkl_id)
-            with open(str(pkl_file), 'rb') as pl:
-                lganm_dict = pickle.load(pl)
-                lganm_parm = {'dict_name': 'lganm',
-                              'repeat': args.repeat,
-                              'mid_size': lganm_dict['envs'][0].shape[1],
-                              'out_type': 'integer',
-                              'env_num': len(lganm_dict['envs'])}
-                lganm_dict.update(lganm_parm)
+    pkl_dir = args.lganm_dir / args.exp / 'n_1000'
+    print(pkl_dir, len(list(pkl_dir.glob('*.pickle'))))
+    for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
+        if pkl_id > 400:
+            continue
+    # for pkl_id in ['218', '213', '387', '214', '53', '52', '219', '98', '385', '121',
+    #     '220', '185', '96', '384', '108', '97', '55', '386', '123', '54']:
+    #     # print('{} {} experiment id: {}'.format(exp, pkl_id, pkl_file.stem))
+    #     pkl_file = args.lganm_dir / exp / 'n_1000' / '{}.pickle'.format(pkl_id)
+        with open(str(pkl_file), 'rb') as pl:
+            lganm_dict = pickle.load(pl)
+            lganm_parm = {'dict_name': 'lganm',
+                            'repeat': args.repeat,
+                            'mid_size': lganm_dict['envs'][0].shape[1],
+                            'out_type': 'integer',
+                            'env_num': len(lganm_dict['envs'])}
+            lganm_dict.update(lganm_parm)
 
-            for sequence_idx, sequence in enumerate(seq_info_dict['sequences']):
-                for task_id in range(seq_info_dict['num_tasks']):
-                    main(lganm_dict=lganm_dict,
-                         task_id=task_id,
-                         seq_str=sequence,
-                         seq_name=prefixes[sequence_idx],
-                         synthesizer=settings['synthesizer'])
-                    mean_jacob.append(lganm_dict['jacob'])
-                    mean_fwer.append(lganm_dict['fwer'])
-                    if lganm_dict['jacob'] != 1:
-                        res_dict['error'].append(pkl_file.stem)
+        for sequence_idx, sequence in enumerate(seq_info_dict['sequences']):
+            for task_id in range(seq_info_dict['num_tasks']):
+                main(lganm_dict=lganm_dict,
+                        task_id=task_id,
+                        seq_str=sequence,
+                        seq_name=prefixes[sequence_idx],
+                        synthesizer=settings['synthesizer'])
+                mean_jacob.append(lganm_dict['jacob'])
+                mean_fwer.append(lganm_dict['fwer'])
+                if lganm_dict['jacob'] != 1:
+                    res_dict['error'].append(pkl_file.stem)
 
-                    for key in res_dict:
-                        if key not in ('error', 'id'):
-                            res_dict[key].append(lganm_dict[key])
-                    res_dict['id'].append(pkl_file.stem)
-                    # print(res_dict['accept'], res_dict['truth'], res_dict['target'])
+                for key in res_dict:
+                    if key not in ('error', 'id'):
+                        res_dict[key].append(lganm_dict[key])
+                res_dict['id'].append(pkl_file.stem)
+                # print(res_dict['accept'], res_dict['truth'], res_dict['target'])
 
-        pkl_nm = pathlib.Path(settings['results_dir']) / 'n_1000_res.pickle'
-        with open(str(pkl_nm), 'wb') as pl:
-            pickle.dump(res_dict, pl)
+    pkl_nm = pathlib.Path(settings['results_dir']) / 'n_1000_res.pickle'
+    with open(str(pkl_nm), 'wb') as pl:
+        pickle.dump(res_dict, pl)
 
-        print(sum(mean_fwer) / len(mean_fwer))
-        print(sum(mean_jacob) / len(mean_jacob))
-        print(res_dict['error'])
+    print(sum(mean_fwer) / len(mean_fwer))
+    print(sum(mean_jacob) / len(mean_jacob))
+    print(res_dict['error'])
