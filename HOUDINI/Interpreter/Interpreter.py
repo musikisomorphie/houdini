@@ -629,7 +629,7 @@ class Interpreter:
         # mean_list = list()
         cur_res = np.array(cur_res)
         cur_mean = np.mean(cur_res)
-        cur_std = np.var(cur_res)
+        cur_std = np.std(cur_res)
         for env in range(self.data_dict['env_num']):
             res_env = res[env]
             # cur_env = cur_res[env]
