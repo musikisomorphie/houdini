@@ -637,7 +637,7 @@ class Interpreter:
                 (np.std(res_env) - cur_std) ** 2
             # wdist = (np.mean(res_env) - np.mean(cur_env)) ** 2 + \
             #     (np.sqrt(np.var(res_env)) - np.sqrt(np.var(cur_env))) ** 2
-            wass_dis.append(wdist)
+            wass_dis.append(np.sqrt(wdist))
         # print(max(wass_dis))
         return max(wass_dis), np.mean(np.array(res))
 
