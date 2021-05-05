@@ -629,15 +629,15 @@ class Interpreter:
         # mean_list = list()
         cur_res = np.array(cur_res)
         cur_mean = np.mean(cur_res)
-        cur_var = np.var(cur_res)
+        cur_std = np.var(cur_res)
         for env in range(self.data_dict['env_num']):
             res_env = res[env]
             # cur_env = cur_res[env]
             wdist = (np.mean(res_env) - cur_mean) ** 2 + \
-                (np.sqrt(np.var(res_env)) - np.sqrt(cur_var)) ** 2
+                (np.std(res_env) - cur_std) ** 2
             # wdist = (np.mean(res_env) - np.mean(cur_env)) ** 2 + \
             #     (np.sqrt(np.var(res_env)) - np.sqrt(np.var(cur_env))) ** 2
-            wass_dis.append(np.sqrt(wdist))
+            wass_dis.append(wdist)
         # print(max(wass_dis))
         return max(wass_dis), np.mean(np.array(res))
 
@@ -777,3 +777,12 @@ class Interpreter:
             else:
                 raise NotImplementedError()
         return unk_fns_interpreter_def_list
+
+    def _temp(self, parm_do, parm_non_do):
+        with torch.no_grad():
+            tmp = parm_do[0].detach().clone()
+            tmp[:] = 0
+            parm_do[0].copy_(tmp)
+            tmp1 = parm_non_do[0].detach().clone()
+            tmp1[:] = 1
+            parm_non_do[0].copy_(tmp)
