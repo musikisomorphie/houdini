@@ -283,7 +283,7 @@ if __name__ == '__main__':
     args = parse_args()
 
     for exp in ('abcd',):
-        settings = {'results_dir': '/home/histopath/Model/LGANM/Results_003/',
+        settings = {'results_dir': str(args.lganm_dir / 'Results'),
                     # If False, the interpreter doesn't learn the new parameters
                     'dbg_learn_parameters': True,
                     # enumerative, evolutionary
@@ -317,7 +317,7 @@ if __name__ == '__main__':
         pkl_dir = args.lganm_dir / exp / 'n_1000'
         print(pkl_dir, len(list(pkl_dir.glob('*.pickle'))))
         for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
-            if pkl_id > 200:
+            if pkl_id > 400:
                 continue
         # for pkl_id in ['218', '213', '387', '214', '53', '52', '219', '98', '385', '121',
         #     '220', '185', '96', '384', '108', '97', '55', '386', '123', '54']:
@@ -350,9 +350,9 @@ if __name__ == '__main__':
                     res_dict['id'].append(pkl_file.stem)
                     # print(res_dict['accept'], res_dict['truth'], res_dict['target'])
 
-        # pkl_nm = pathlib.Path(settings['results_dir']) / 'n_1000_res.pickle'
-        # with open(str(pkl_nm), 'wb') as pl:
-        #     pickle.dump(res_dict, pl)
+        pkl_nm = pathlib.Path(settings['results_dir']) / 'n_1000_res.pickle'
+        with open(str(pkl_nm), 'wb') as pl:
+            pickle.dump(res_dict, pl)
 
         print(sum(mean_fwer) / len(mean_fwer))
         print(sum(mean_jacob) / len(mean_jacob))
