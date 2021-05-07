@@ -225,7 +225,7 @@ class Interpreter:
                 x_grads = self._compute_grad(x_in.clone(),
                                              program,
                                              global_vars)
-                x_grads = torch.reshape(x_grads, (-1, x_grads.shape[-1]))
+                x_grads = torch.cat(torch.split(x_grads, 1, dim=1), dim=0).squeeze()
                 x_grads_norm = x_grads.norm(dim=0)
                 grad_all.append(x_grads_norm.detach().clone().cpu().numpy())
 
