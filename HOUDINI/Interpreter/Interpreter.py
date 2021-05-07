@@ -392,6 +392,8 @@ class Interpreter:
                                                         new_fns_dict,
                                                         compute_grad=is_lganm)[:2]
                 prob_idx = np.argsort(sota_grad).tolist()
+                sota_mse = val_mse
+                sota_acc = -np.mean(sota_mse)
                 print(sota_grad, prob_idx)
 
             else:
@@ -410,13 +412,13 @@ class Interpreter:
             tst_acc = -np.mean(tst_mse)
             tst_var = np.var(tst_mse)
 
-            if sota_acc < val_acc:
-                sota_acc = val_acc
-                sota_var = val_var
-                sota_mse = val_mse
-                for new_fn_name, new_fn in new_fns_dict.items():
-                    sota_acc_new_fns_states[new_fn_name] = self._clone_hidden_state(
-                        new_fn.state_dict())
+            #if sota_acc < val_acc:
+            #    sota_acc = val_acc
+            #    sota_var = val_var
+            #    sota_mse = val_mse
+            #    for new_fn_name, new_fn in new_fns_dict.items():
+            #        sota_acc_new_fns_states[new_fn_name] = self._clone_hidden_state(
+            #            new_fn.state_dict())
 
             if parm_do and epoch > 7:
                 wass_dis, cur_mean = self._wass(val_mse, sota_mse)
