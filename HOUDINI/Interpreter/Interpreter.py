@@ -392,6 +392,7 @@ class Interpreter:
                                                         output_type,
                                                         new_fns_dict,
                                                         compute_grad=is_lganm)[:2]
+                sota_grad *= parm_do[0][0].detach().cpu().numpy()
                 prob_idx = np.argsort(sota_grad).tolist()
                 #sota_mse = val_mse
                 #sota_acc = -np.mean(sota_mse)
@@ -425,7 +426,7 @@ class Interpreter:
 
             if parm_do and epoch > 7:
                 wass_dis, cur_mean = self._wass(val_mse, sota_mse)
-                coef = 9 * (sota_grad[sota_idx] <= 0.23) 
+                coef = 8 * (sota_grad[sota_idx] <= 1 / 11)
                 if wass_dis > -coef * sota_acc:
                     if not has_trained_more:
                         has_trained_more = True
