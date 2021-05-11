@@ -426,7 +426,7 @@ class Interpreter:
 
             if parm_do and epoch > 7:
                 wass_dis, cur_mean = self._wass(val_mse, sota_mse)
-                coef = 8 * (sota_grad[sota_idx] <= 1 / 11)
+                coef = 9 * (sota_grad[sota_idx] < 0.1)
                 if wass_dis > -coef * sota_acc:
                     if not has_trained_more:
                         has_trained_more = True
