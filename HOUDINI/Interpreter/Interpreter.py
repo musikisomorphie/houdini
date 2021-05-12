@@ -7,7 +7,7 @@ from enum import Enum
 from functools import reduce
 from collections import OrderedDict
 from scipy import stats
-from typing import List, Dict, Optional, Tuple, Union
+from typing import List, Dict, Optional, Tuple, Union, Iterator
 import torch
 import torch.nn.functional as F
 from torch import autograd
@@ -91,12 +91,23 @@ class Interpreter:
     def _get_data_loader(self,
                          io_examples: tuple,
                          batch: int) -> NumpyDataSetIterator:
-        if type(io_examples) == tuple and len(io_examples) == 2:
+        """ Wrap the data with the NumpyDataSetIterator class
+
+        Args:
+            io_examples: the tuple of numpy input data (data, label)
+
+        Returns:
+            the NumpyDataSetIterator of the input data
+        """
+
+        if isinstance(io_examples, tuple) and \
+           len(io_examples) == 2:
             output = NumpyDataSetIterator(io_examples[0],
                                           io_examples[1],
                                           batch)
         else:
-            raise NotImplementedError()
+            raise NotImplementedError(
+                'Processing the data type {} is not implemented'.format(type(io_examples)))
         return output
 
     def _compute_grad(self,
@@ -134,16 +145,31 @@ class Interpreter:
                               only_inputs=True)[0]
         return grads.detach()
 
-    def _predict_data(self, program, data_loader, new_fns_dict):
+    def _predict_data(self,
+                      data_loader: NumpyDataSetIterator,
+                      program: str,
+                      global_vars: dict) -> Iterator[Tuple]:
+        """ The core learning step for each iteration, i.e.
+        feed one batch data to the nn and compute the output.
+
+        Args:
+            data_loader: the data iterator that can generate a batch of data 
+            program: the program string, for example:
+                'lib.compose(nn_fun_idef_np_tdidef_58, 
+                             lib.cat(lib.do(nn_fun_idef_np_tdidef_59)))'
+            global_vars: the dict with the key of the function in the 
+                program string, and the value of the function implmentation
+
+        Returns:
+            the tuple of torch tensors: (prediction, groud-truth, input)
         """
-        An iterator, which executes the given program on mini-batches the data and returns the results.
-        """
+
         # list of data_loader_iterators
-        if issubclass(type(data_loader), NumpyDataSetIterator):
-            data_loader = [data_loader]
+        if isinstance(data_loader, NumpyDataSetIterator):
+            data_loader_list = [data_loader]
 
         # creating a shallow copy of the list of iterators
-        dl_iters_list = list(data_loader)
+        dl_iters_list = list(data_loader_list)
         while dl_iters_list.__len__() > 0:
             data_sample = None
             while data_sample is None and dl_iters_list.__len__() > 0:
@@ -158,74 +184,72 @@ class Interpreter:
                     dl_iters_list.remove(c_rndm_iterator)
             if data_sample is not None:
                 x, y = data_sample
-                # batch, env = y.shape[0], y.shape[1]
-                # y = np.reshape(y, (batch*env, -1))
                 x = torch.from_numpy(x)
+                x = autograd.Variable(x)
+
                 y = torch.from_numpy(y)
-                # print(y.shape)
-                batch, env = y.shape[0], y.shape[1]
-                # y = torch.reshape(y, (batch * env, -1))
                 y = torch.cat(torch.split(y, 1, dim=1), dim=0).squeeze(dim=1)
-                x = autograd.Variable(
-                    x).cuda() if torch.cuda.is_available() else autograd.Variable(x)
-                y = autograd.Variable(
-                    y).cuda() if torch.cuda.is_available() else autograd.Variable(y)
-                # global_vars = {"lib": self.library, "inputs": x}
-                global_vars = {"lib": self.library}
-                global_vars = {**global_vars, **new_fns_dict}
+                y = autograd.Variable(y)
+
+                if torch.cuda.is_available():
+                    x = x.cuda()
+                    y = y.cuda()
+
                 y_pred = eval(program, global_vars)(x.float())
-                # print(len(y_pred), y_pred[0].shape, y_pred[1].shape)
                 yield (y_pred, y.float(), x.float())
 
     def _get_accuracy(self,
-                      program,
-                      data_loader,
-                      output_type,
-                      new_fns_dict,
-                      compute_grad=False,
-                      compute_prob=False):
-        global_vars = {"lib": self.library}
-        global_vars = {**global_vars, **new_fns_dict}
+                      output_type: ProgramOutputType,
+                      data_loader: NumpyDataSetIterator,
+                      program: str,
+                      global_vars: dict,
+                      compute_grad: bool = False) -> Tuple:
+        """ Compute the relevant metric for trained model
 
-        if issubclass(type(data_loader), NumpyDataSetIterator):
-            num_datapoints = data_loader.num_datapoints
+        Args:
+            output_type: the type of output, this determines the metric used
+                for each type
+            data_loader: the data iterator that can generate a batch of data
+            program: the program string, for example:
+                'lib.compose(nn_fun_idef_np_tdidef_58,
+                             lib.cat(lib.do(nn_fun_idef_np_tdidef_59)))'
+            global_vars: the dict with the key of the function in the
+                program string, and the value of the function implmentation
+            compute_grad: whether compute (mean) gradients or not, False by default 
+
+        Returns:
+            the tuple of numpy arrays: (mse, gradients, other scores),
+                the other scores can be cox scores if portec, None else.
+        """
+
+        if output_type == ProgramOutputType.INTEGER:
+            metric = F.mse_loss
+        elif output_type == ProgramOutputType.HAZARD:
+            metric = Loss.cox_ph_loss
         else:
-            num_datapoints = reduce(
-                lambda a, b: a + b.num_datapoints, data_loader, 0.)
+            raise TypeError('Unknown output type {}'.format(output_type))
 
-        c_num_matching_datapoints = 0
-        mse = list()  # atm, only accumulated, if the output is a real number
         debug_y = list()
-        y_pred_all, y_all = list(), list()
-        grad_all, prob_all = list(), list()
-        for y_pred, y, x_in in self._predict_data(program, data_loader, new_fns_dict):
-            # for i in range(12):
-            #     dt_num = y.shape[0] // 12
-            #     if not torch.all(y[i * dt_num: (i + 1) * dt_num, -1] == i):
-            #         print('false env')
-            #         print(y[i * dt_num: (i + 1) * dt_num])
-            if type(y_pred) == tuple:
-                y_pred_output, pred_prob = y_pred
-            else:
-                pred_prob = None
+        y_pred_all, y_all, grad_all = list(), list(), list()
+        mse_out, grad_out, score_out = list(), None, None
+        for y_pred, y, x_in in self._predict_data(data_loader, program, global_vars):
+            if isinstance(y_pred, tuple):
+                y_pred = y_pred[0]
 
-            # in case of an int, also calcualte the sqrt(RMSE)
-            if output_type == ProgramOutputType.INTEGER:
-                torch_mse = F.mse_loss(y_pred_output, y, reduction='none')
-            elif output_type == ProgramOutputType.HAZARD:
-                torch_mse = Loss.cox_ph_loss(
-                    y_pred_output, y, reduction='none')
-                y_pred_all.append(y_pred_output)
-                y_all.append(y)
-            else:
-                raise NotImplementedError()
-
-            np_mse = torch_mse.detach().cpu().numpy()
+            torch_mse = metric(y_pred,
+                               y,
+                               reduction='none')
+            torch_mse = torch_mse.detach().cpu().numpy()
             # np.split is different to torch.split
-            mse.append(np.split(np_mse, self.data_dict['env_num'], axis=0))
+            torch_mse = np.split(torch_mse, x_in.shape[1], axis=0)
+            mse_out.append(torch_mse)
 
-            # np_y = y.detach().cpu().numpy()
-            # debug_y.append(np.split(np_y, self.data_dict['env_num'], axis=0))
+            torch_y = y.detach().cpu().numpy()
+            torch_y = np.split(torch_y, x_in.shape[1], axis=0)
+            debug_y.append(torch_y)
+
+            y_pred_all.append(y_pred)
+            y_all.append(y)
 
             if compute_grad:
                 x_grads = self._compute_grad(x_in.clone(),
@@ -234,60 +258,54 @@ class Interpreter:
                 x_grads = torch.cat(torch.split(
                     x_grads, 1, dim=1), dim=0).squeeze()
                 x_grads_norm = x_grads.abs().mean(dim=0)
-                grad_all.append(x_grads_norm.detach().clone().cpu().numpy())
+                grad_all.append(x_grads_norm.detach().cpu().numpy())
 
-        grad_mean = None
-        if compute_grad:
-            grad_all = np.asarray(grad_all)
-            grad_mean = np.mean(grad_all, axis=0)
-            grad_mean = grad_mean / grad_mean.sum()
-            # outcome = self.data_dict['target']
-            # parents = set(self.data_dict['truth'])
-            # # number of all variables: causal var candidates + outcomet
-            # par_cand = list(range(grad_mean.shape[0] + 1))
-            # del par_cand[outcome]
-
-            # grad_idx = np.argsort(-grad_mean)
-            # grad_idx = grad_idx[:len(parents)]
-            # cand_set = set(np.array(par_cand)[grad_idx])
-            # jacob = len(parents.intersection(cand_set)) / \
-            #     len(parents.union(cand_set))
-
-            # self.data_dict['grads'] = grad_mean
-            # print(grad_mean, grad_idx, cand_set, outcome, parents, jacob)
-
-        mse = list(zip(*mse))
-        mse = [np.concatenate(mse_env, axis=0) for mse_env in mse]
+        mse_out = list(zip(*mse_out))
+        mse_out = [np.concatenate(mse_env, axis=0) for mse_env in mse_out]
 
         # debug_y = list(zip(*debug_y))
         # for debug_id, debug in enumerate(debug_y):
         #     debug = np.concatenate(debug, axis=0)
         #     assert np.all(debug == debug_id)
 
-        # returning -rmse, so that we select the best performance.
         if output_type == ProgramOutputType.HAZARD:
-            y_all_np = torch.cat(y_all, dim=0).cpu().detach().numpy()
+            y_all_np = torch.cat(y_all, dim=0).detach().cpu().numpy()
             y_pred_all_np = torch.cat(
-                y_pred_all, dim=0).cpu().detach().numpy()
+                y_pred_all, dim=0).detach().cpu().numpy()
             cox_metric = Metric.coxph(y_pred_all_np, y_all_np)
             cox_scores = cox_metric.eval_surv(y_pred_all_np, y_all_np)
 
             g_in = torch.tensor(
                 list(self.data_dict['clinical_meta']['causal'].values()))
-            g_in = g_in.unsqueeze(dim=0).unsqueeze(dim=0).float().cuda()
+            g_in = g_in.unsqueeze(dim=0).unsqueeze(dim=0).float()
+            if torch.cuda.is_available():
+                g_in = g_in.cuda()
             cox_grads = self._compute_grad(g_in,
                                            program,
                                            global_vars)
 
             cox_grads = cox_grads.cpu().numpy()
             cox_grads = np.squeeze(cox_grads)
-            return mse, cox_grads, cox_scores
-        elif output_type == ProgramOutputType.INTEGER:
-            return mse, grad_mean, None
-        else:
-            raise NotImplementedError()
 
-    def _clone_hidden_state(self, state):
+            grad_out = cox_grads
+            score_out = cox_scores
+        else:
+            if grad_all and output_type == ProgramOutputType.INTEGER:
+                grad_all = np.asarray(grad_all)
+                grad_out = np.mean(grad_all, axis=0)
+                grad_out = grad_out / grad_out.sum()
+
+        return mse_out, grad_out, score_out
+
+    def _clone_hidden_state(self, state: Dict) -> Dict:
+        """ Deep copy the state_dict of the learnable weights
+
+        Args:
+            state: the pytorch state_dict
+
+        Returns:
+            the cloned state_dict()
+        """
         result = OrderedDict()
         for key, val in state.items():
             result[key] = val.clone()
@@ -365,7 +383,7 @@ class Interpreter:
             print("Starting epoch ", epoch)
             iter_in_one_epoch = 0
             prob_all, metric_all = 0, list()
-            for y_pred, y, x_in in self._predict_data(program, data_loader_trn, new_fns_dict):
+            for y_pred, y, x_in in self._predict_data(data_loader_trn, program, global_vars):
                 # for i in range(12):
                 #     dt_num = y.shape[0] // 12
                 #     if not np.all(y[i * dt_num: (i + 1) * dt_num, -1].detach().cpu().numpy() == i):
@@ -394,10 +412,10 @@ class Interpreter:
                 value.eval()
 
             if epoch <= 7:
-                val_mse, val_grad = self._get_accuracy(program,
+                val_mse, val_grad = self._get_accuracy(output_type,
                                                        data_loader_val,
-                                                       output_type,
-                                                       new_fns_dict,
+                                                       program,
+                                                       global_vars,
                                                        compute_grad=is_lganm)[:2]
                 # sota_grad *= parm_do[0][0].detach().cpu().numpy()
                 # prob_idx = np.argsort(sota_grad).tolist()
@@ -408,15 +426,15 @@ class Interpreter:
                 #print(sota_grad, prob_idx)
 
             else:
-                val_mse = self._get_accuracy(program,
+                val_mse = self._get_accuracy(output_type,
                                              data_loader_val,
-                                             output_type,
-                                             new_fns_dict)[0]
+                                             program,
+                                             global_vars)[0]
 
-            tst_mse = self._get_accuracy(program,
+            tst_mse = self._get_accuracy(output_type,
                                          data_loader_tst,
-                                         output_type,
-                                         new_fns_dict)[0]
+                                         program,
+                                         global_vars)[0]
 
             val_acc = -np.mean(val_mse)
             val_var = np.var(val_mse)
@@ -514,8 +532,9 @@ class Interpreter:
         self.data_dict['jacob'] = len(par_set.intersection(cnd_set)) / \
             len(par_set.union(cnd_set))
         self.data_dict['fwer'] = not cnd_set.issubset(par_set)
-        self.data_dict['likelihood'] = parm_do[0][0].detach().cpu().numpy()
-
+        self.data_dict['likelihood'] = torch.sigmoid(
+            parm_do[0][0]).detach().cpu().numpy()
+        self.data_dict['grads'] = sota_grad
         return new_fns_dict, max_accuracy, evaluations_np
 
     def evaluate_(self,
@@ -565,42 +584,42 @@ class Interpreter:
                                                                                       data_loader_trn,
                                                                                       data_loader_val,
                                                                                       data_loader_tst)
-            val_acc = self._get_accuracy(program,
-                                         data_loader_val,
-                                         output_type,
-                                         new_fns_dict,
-                                         compute_grad=is_lganm)
+            # val_acc = self._get_accuracy(program,
+            #                              data_loader_val,
+            #                              output_type,
+            #                              new_fns_dict,
+            #                              compute_grad=is_lganm)
 
-            test_acc = self._get_accuracy(program,
-                                          data_loader_tst,
-                                          output_type,
-                                          new_fns_dict)
-            val_accuracy.append(np.mean(val_acc[0]))
-            test_accuracy.append(np.var(test_acc[0]))
-            if output_type == ProgramOutputType.HAZARD:
-                cox_grads.append(val_acc[1])
-                cox_scores.append(val_acc[2])
+            # test_acc = self._get_accuracy(program,
+            #                               data_loader_tst,
+            #                               output_type,
+            #                               new_fns_dict)
+            val_accuracy.append(val_acc[0])
+            # test_accuracy.append(np.var(test_acc[0]))
+        #     if output_type == ProgramOutputType.HAZARD:
+        #         cox_grads.append(val_acc[1])
+        #         cox_scores.append(val_acc[2])
 
-        val_accuracy = sum(val_accuracy) / len(val_accuracy)
-        test_accuracy = sum(test_accuracy) / len(test_accuracy)
-        if output_type == ProgramOutputType.HAZARD:
-            cox_scores = list(zip(*cox_scores))
-            cox_grads = np.asarray(cox_grads)
-            cox_index = list(range(cox_grads.shape[1]))
-            cox_index = list(self.data_dict['clinical_meta']['causal'].keys())
-            cox_dir = self.data_dict['res_dir']
-            # print(cox_index, cox_grads.shape)
-            cox_utils = MetricUtils.coxsum(cox_index, cox_grads)
-            cox_utils.vis_plot(cox_scores,
-                               pathlib.Path(cox_dir),
-                               self.data_dict['metric_scores'])
-            print(cox_utils.summary(pathlib.Path(cox_dir)))
+        # val_accuracy = sum(val_accuracy) / len(val_accuracy)
+        # test_accuracy = sum(test_accuracy) / len(test_accuracy)
+        # if output_type == ProgramOutputType.HAZARD:
+        #     cox_scores = list(zip(*cox_scores))
+        #     cox_grads = np.asarray(cox_grads)
+        #     cox_index = list(range(cox_grads.shape[1]))
+        #     cox_index = list(self.data_dict['clinical_meta']['causal'].keys())
+        #     cox_dir = self.data_dict['res_dir']
+        #     # print(cox_index, cox_grads.shape)
+        #     cox_utils = MetricUtils.coxsum(cox_index, cox_grads)
+        #     cox_utils.vis_plot(cox_scores,
+        #                        pathlib.Path(cox_dir),
+        #                        self.data_dict['metric_scores'])
+        #     print(cox_utils.summary(pathlib.Path(cox_dir)))
 
-        self.data_dict['grads'] = val_acc[1]
-        print('validation accuracy: {}'.format(val_accuracy))
-        print('test accuracy: {}'.format(test_accuracy))
+        # self.data_dict['grads'] = val_acc[1]
+        # print('validation accuracy: {}'.format(val_accuracy))
+        # print('test accuracy: {}'.format(test_accuracy))
         return {'accuracy': val_accuracy, 'new_fns_dict': new_fns_dict,
-                'test_accuracy': test_accuracy, 'evaluations_np': evaluations_np}
+                'test_accuracy': val_accuracy, 'evaluations_np': evaluations_np}
 
     # program=st, output_type=output_type, unkSortMap=unkSortMap, io_examples=self.ioExamples
     def evaluate(self,
