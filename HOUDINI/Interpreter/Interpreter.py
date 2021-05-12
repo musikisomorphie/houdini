@@ -146,7 +146,7 @@ class Interpreter:
     def _predict_data(self,
                       data_loader: NumpyDataSetIterator,
                       program: str,
-                      global_vars: dict) -> Iterator[Tuple]:
+                      new_fns_dict: dict) -> Iterator[Tuple]:
         """ The core learning step for each iteration, i.e.
         feed one batch data to the nn and compute the output.
         Args:
@@ -191,6 +191,8 @@ class Interpreter:
                     x = x.cuda()
                     y = y.cuda()
 
+                global_vars = {"lib": self.library}
+                global_vars = {**global_vars, **new_fns_dict}
                 y_pred = eval(program, global_vars)(x.float())
                 yield (y_pred, y.float(), x.float())
 
@@ -215,7 +217,7 @@ class Interpreter:
         debug_y = list()
         y_pred_all, y_all = list(), list()
         grad_all, prob_all = list(), list()
-        for y_pred, y, x_in in self._predict_data(data_loader, program, global_vars):
+        for y_pred, y, x_in in self._predict_data(data_loader, program, new_fns_dict):
             # for i in range(12):
             #     dt_num = y.shape[0] // 12
             #     if not torch.all(y[i * dt_num: (i + 1) * dt_num, -1] == i):
@@ -382,7 +384,7 @@ class Interpreter:
             print("Starting epoch ", epoch)
             iter_in_one_epoch = 0
             prob_all, metric_all = 0, list()
-            for y_pred, y, x_in in self._predict_data(data_loader_trn, program, global_vars):
+            for y_pred, y, x_in in self._predict_data(data_loader_trn, program, new_fns_dict):
                 # for i in range(12):
                 #     dt_num = y.shape[0] // 12
                 #     if not np.all(y[i * dt_num: (i + 1) * dt_num, -1].detach().cpu().numpy() == i):
