@@ -7,7 +7,7 @@ from enum import Enum
 from functools import reduce
 from collections import OrderedDict
 from scipy import stats
-from typing import List, Dict, Optional, Tuple, Union
+from typing import List, Dict, Optional, Tuple, Union, Iterator
 import torch
 import torch.nn.functional as F
 from torch import autograd
@@ -91,12 +91,21 @@ class Interpreter:
     def _get_data_loader(self,
                          io_examples: tuple,
                          batch: int) -> NumpyDataSetIterator:
-        if type(io_examples) == tuple and len(io_examples) == 2:
+        """ Wrap the data with the NumpyDataSetIterator class
+        Args:
+            io_examples: the tuple of numpy input data (data, label)
+        Returns:
+            the NumpyDataSetIterator of the input data
+        """
+
+        if isinstance(io_examples, tuple) and \
+           len(io_examples) == 2:
             output = NumpyDataSetIterator(io_examples[0],
                                           io_examples[1],
                                           batch)
         else:
-            raise NotImplementedError()
+            raise NotImplementedError(
+                'Processing the data type {} is not implemented'.format(type(io_examples)))
         return output
 
     def _compute_grad(self,
@@ -134,16 +143,29 @@ class Interpreter:
                               only_inputs=True)[0]
         return grads.detach()
 
-    def _predict_data(self, program, data_loader, new_fns_dict):
+    def _predict_data(self,
+                      data_loader: NumpyDataSetIterator,
+                      program: str,
+                      global_vars: dict) -> Iterator[Tuple]:
+        """ The core learning step for each iteration, i.e.
+        feed one batch data to the nn and compute the output.
+        Args:
+            data_loader: the data iterator that can generate a batch of data 
+            program: the program string, for example:
+                'lib.compose(nn_fun_idef_np_tdidef_58, 
+                             lib.cat(lib.do(nn_fun_idef_np_tdidef_59)))'
+            global_vars: the dict with the key of the function in the 
+                program string, and the value of the function implmentation
+        Returns:
+            the tuple of torch tensors: (prediction, groud-truth, input)
         """
-        An iterator, which executes the given program on mini-batches the data and returns the results.
-        """
+
         # list of data_loader_iterators
-        if issubclass(type(data_loader), NumpyDataSetIterator):
-            data_loader = [data_loader]
+        if isinstance(data_loader, NumpyDataSetIterator):
+            data_loader_list = [data_loader]
 
         # creating a shallow copy of the list of iterators
-        dl_iters_list = list(data_loader)
+        dl_iters_list = list(data_loader_list)
         while dl_iters_list.__len__() > 0:
             data_sample = None
             while data_sample is None and dl_iters_list.__len__() > 0:
@@ -158,23 +180,18 @@ class Interpreter:
                     dl_iters_list.remove(c_rndm_iterator)
             if data_sample is not None:
                 x, y = data_sample
-                # batch, env = y.shape[0], y.shape[1]
-                # y = np.reshape(y, (batch*env, -1))
                 x = torch.from_numpy(x)
+                x = autograd.Variable(x)
+
                 y = torch.from_numpy(y)
-                # print(y.shape)
-                batch, env = y.shape[0], y.shape[1]
-                # y = torch.reshape(y, (batch * env, -1))
                 y = torch.cat(torch.split(y, 1, dim=1), dim=0).squeeze(dim=1)
-                x = autograd.Variable(
-                    x).cuda() if torch.cuda.is_available() else autograd.Variable(x)
-                y = autograd.Variable(
-                    y).cuda() if torch.cuda.is_available() else autograd.Variable(y)
-                # global_vars = {"lib": self.library, "inputs": x}
-                global_vars = {"lib": self.library}
-                global_vars = {**global_vars, **new_fns_dict}
+                y = autograd.Variable(y)
+
+                if torch.cuda.is_available():
+                    x = x.cuda()
+                    y = y.cuda()
+
                 y_pred = eval(program, global_vars)(x.float())
-                # print(len(y_pred), y_pred[0].shape, y_pred[1].shape)
                 yield (y_pred, y.float(), x.float())
 
     def _get_accuracy(self,
@@ -198,7 +215,7 @@ class Interpreter:
         debug_y = list()
         y_pred_all, y_all = list(), list()
         grad_all, prob_all = list(), list()
-        for y_pred, y, x_in in self._predict_data(program, data_loader, new_fns_dict):
+        for y_pred, y, x_in in self._predict_data(data_loader, program, global_vars):
             # for i in range(12):
             #     dt_num = y.shape[0] // 12
             #     if not torch.all(y[i * dt_num: (i + 1) * dt_num, -1] == i):
@@ -365,7 +382,7 @@ class Interpreter:
             print("Starting epoch ", epoch)
             iter_in_one_epoch = 0
             prob_all, metric_all = 0, list()
-            for y_pred, y, x_in in self._predict_data(program, data_loader_trn, new_fns_dict):
+            for y_pred, y, x_in in self._predict_data(data_loader_trn, program, global_vars):
                 # for i in range(12):
                 #     dt_num = y.shape[0] // 12
                 #     if not np.all(y[i * dt_num: (i + 1) * dt_num, -1].detach().cpu().numpy() == i):

@@ -347,6 +347,8 @@ if __name__ == '__main__':
                     if key not in ('error', 'id'):
                         res_dict[key].append(lganm_dict[key])
                 res_dict['id'].append(pkl_file.stem)
+                print('FWER: ', sum(mean_fwer) / len(mean_fwer))
+                print('JS: ', sum(mean_jacob) / len(mean_jacob))
                 # print(res_dict['accept'], res_dict['truth'], res_dict['target'])
 
     pkl_nm = pathlib.Path(settings['results_dir']) / 'n_1000_res.pickle'
