@@ -7,21 +7,19 @@ from enum import Enum
 from functools import reduce
 from collections import OrderedDict
 from scipy import stats
-from typing import NamedTuple, Union, List, Dict
+from typing import List, Dict, Optional, Tuple, Union
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
+from torch import autograd
 
-from Data.DataGenerator import NumpyDataSetIterator, ListNumpyDataSetIterator
-from HOUDINI.Config import config
+from Data.DataGenerator import NumpyDataSetIterator
 from HOUDINI.Library import Loss, Metric
 from HOUDINI.Library.Utils import MetricUtils
 from HOUDINI.Synthesizer import AST
 from HOUDINI.Synthesizer.Utils import ReprUtils
 from HOUDINI.Library import NN
 from HOUDINI.Library.Utils import NNUtils
-from HOUDINI.Library.FnLibrary import FnLibrary
+from HOUDINI.Library.OpLibrary import OpLibrary
 
 
 class ProgramOutputType(Enum):
@@ -29,45 +27,50 @@ class ProgramOutputType(Enum):
     SIGMOID = 2,
     SOFTMAX = 3,
     HAZARD = 4
-    # REAL = 2 # using l2 regression, no accuracy evaluated. Perhaps can use some epsilon, not implemented
-# ProgramRep = TypeVar('ProgramRep')
 
 
 class Interpreter:
-    """
-    TODO: remember, once the program has been found, we might need to continue training it until convergence.
-    Also, even if there's no new module introduced in the program, we might want to fine-tune existing modules.
+    """The core neural network learning algorithm 
+    This class is called after obtaining multiple type-safe function candidates
+
+    Attributes:
+        settings: the TaskSettings class storing the training parameters
+                  and the dataset info. 
+        library: the OpLibrary class initializing the higher order functions.
+        evaluate_every_n_percent: deprecated.
     """
 
     def __init__(self,
                  settings,
-                 library: FnLibrary,
-                 evaluate_every_n_percent=10.):
-        #  batch_size=150,
-        #  epochs=1,
-        #  lr=0.02,
-        #  evaluate_every_n_percent=1.):
-        # print(settings)
-        # self.settings = settings
+                 library: OpLibrary,
+                 evaluate_every_n_percent: float = 10.):
+
         self.library = library
         self.data_dict = settings.data_dict
+        self.trn_size = settings.train_size
+        self.val_size = settings.val_size
+        self.tst_size = self.val_size
         self.batch_size = settings.batch_size
         self.epochs = settings.epochs
         self.lr = settings.learning_rate
-        # epochs is changed according to data size, but this stays the same
-        self.original_num_epochs = self.epochs
 
         if self.data_dict['dict_name'] != 'portec':
             self.var_num = self.data_dict['mid_size'] - 1
         else:
             self.var_num = self.data_dict['mid_size'] - 2
-        self.evaluate_every_n_percent = evaluate_every_n_percent
 
     @classmethod
-    def create_nns(cls, unknown_fns):
-        """
-        Creates the NN functions.
-        :return: a tuple: ({fn_name: NN_Object}, trainable_parameters)
+    def create_nns(cls, unknown_fns: List[Dict]) -> Tuple[Dict, Dict]:
+        """ Instantiate the unknown functions with nn,
+        obtain the trainable parameters for direct access 
+        during training.
+
+        Args:
+            unknow_fns: the list of the unknown functions
+
+        Returns:
+            the dict of instantiated nn functions
+            the dict of their trainable parameters
         """
         trainable_parameters = {'do': list(),
                                 'non-do': list()}
@@ -85,48 +88,51 @@ class Interpreter:
                 trainable_parameters['non-do'] += list(c_trainable_params)
         return new_fns_dict, trainable_parameters
 
-    def _get_data_loader(self, io_examples):
-        if io_examples is None:
-            return None
-        if issubclass(type(io_examples), NumpyDataSetIterator):
-            return io_examples
-        elif type(io_examples) == tuple:
-            return NumpyDataSetIterator(io_examples[0], io_examples[1], self.batch_size)
-        elif type(io_examples) == list:
-            loaders_list = []
-            for io_eg in io_examples:
-                if issubclass(type(io_eg), NumpyDataSetIterator):
-                    loaders_list.append(io_eg)
-                elif type(io_eg) == tuple:
-                    loaders_list.append(NumpyDataSetIterator(
-                        io_eg[0], io_eg[1], self.batch_size))
-                else:
-                    raise NotImplementedError
-            return loaders_list
+    def _get_data_loader(self,
+                         io_examples: tuple,
+                         batch: int) -> NumpyDataSetIterator:
+        if type(io_examples) == tuple and len(io_examples) == 2:
+            output = NumpyDataSetIterator(io_examples[0],
+                                          io_examples[1],
+                                          batch)
         else:
-            raise NotImplementedError
+            raise NotImplementedError()
+        return output
 
     def _compute_grad(self,
-                      x_in,
-                      program,
-                      global_vars):
+                      inputs: torch.Tensor,
+                      program: str,
+                      global_vars: dict) -> torch.Tensor:
+        """ Compute the gradients of the nn w.r.t the inputs,
+        the nn is instantiated by the program string and its 
+        corresponding function stored in global vars.
 
-        x_in = torch.autograd.Variable(x_in,
-                                       requires_grad=True)
-        x_pred = eval(program, global_vars)(x_in)
-        if type(x_pred) == tuple:
-            x_pred = x_pred[0]
-        grad_outputs = torch.ones(x_pred.shape)
+        Args:
+            inputs: the input data 
+            program: the program string, for example:
+                'lib.compose(nn_fun_idef_np_tdidef_58, 
+                             lib.cat(lib.do(nn_fun_idef_np_tdidef_59)))'
+            global_vars: the dict with the key of the function in the 
+                program string, and the value of the function implmentation
+
+        Returns:
+            the gradients of the program w.r.t the inputs
+        """
+
+        inputs = autograd.Variable(inputs, requires_grad=True)
+        outputs = eval(program, global_vars)(inputs)
+        if type(outputs) == tuple:
+            outputs = outputs[0]
+        grad_outputs = torch.ones(outputs.shape)
         if torch.cuda.is_available():
             grad_outputs = grad_outputs.cuda()
-        x_grads = torch.autograd.grad(outputs=x_pred,
-                                      inputs=x_in,
-                                      grad_outputs=grad_outputs,
-                                      create_graph=True,
-                                      retain_graph=True,
-                                      only_inputs=True)[0]
-        x_grads = x_grads.detach().clone()
-        return x_grads
+        grads = autograd.grad(outputs=outputs,
+                              inputs=inputs,
+                              grad_outputs=grad_outputs,
+                              create_graph=True,
+                              retain_graph=True,
+                              only_inputs=True)[0]
+        return grads.detach()
 
     def _predict_data(self, program, data_loader, new_fns_dict):
         """
@@ -160,10 +166,10 @@ class Interpreter:
                 batch, env = y.shape[0], y.shape[1]
                 # y = torch.reshape(y, (batch * env, -1))
                 y = torch.cat(torch.split(y, 1, dim=1), dim=0).squeeze(dim=1)
-                x = Variable(
-                    x).cuda() if torch.cuda.is_available() else Variable(x)
-                y = Variable(
-                    y).cuda() if torch.cuda.is_available() else Variable(y)
+                x = autograd.Variable(
+                    x).cuda() if torch.cuda.is_available() else autograd.Variable(x)
+                y = autograd.Variable(
+                    y).cuda() if torch.cuda.is_available() else autograd.Variable(y)
                 # global_vars = {"lib": self.library, "inputs": x}
                 global_vars = {"lib": self.library}
                 global_vars = {**global_vars, **new_fns_dict}
@@ -225,7 +231,8 @@ class Interpreter:
                 x_grads = self._compute_grad(x_in.clone(),
                                              program,
                                              global_vars)
-                x_grads = torch.cat(torch.split(x_grads, 1, dim=1), dim=0).squeeze()
+                x_grads = torch.cat(torch.split(
+                    x_grads, 1, dim=1), dim=0).squeeze()
                 x_grads_norm = x_grads.abs().mean(dim=0)
                 grad_all.append(x_grads_norm.detach().clone().cpu().numpy())
 
@@ -290,9 +297,9 @@ class Interpreter:
                              program,
                              output_type,
                              unknown_fns,
-                             data_loader_tr: NumpyDataSetIterator,
+                             data_loader_trn: NumpyDataSetIterator,
                              data_loader_val: NumpyDataSetIterator,
-                             data_loader_test: NumpyDataSetIterator):
+                             data_loader_tst: NumpyDataSetIterator):
 
         if output_type == ProgramOutputType.INTEGER:
             criterion = torch.nn.MSELoss(reduction='none')
@@ -304,12 +311,12 @@ class Interpreter:
             # combines log_softmax and cross-entropy
             criterion = F.cross_entropy
 
-        # data_loader_tr is either a dataloader or a list of dataloaders
-        if issubclass(type(data_loader_tr), NumpyDataSetIterator):
-            num_datapoints_tr = data_loader_tr.num_datapoints
+        # data_loader_trn is either a dataloader or a list of dataloaders
+        if issubclass(type(data_loader_trn), NumpyDataSetIterator):
+            num_datapoints_tr = data_loader_trn.num_datapoints
         else:
             num_datapoints_tr = reduce(
-                lambda a, b: a + b.num_datapoints, data_loader_tr, 0.)
+                lambda a, b: a + b.num_datapoints, data_loader_trn, 0.)
 
         num_iterations_in_1_epoch = num_datapoints_tr // self.batch_size + \
             (0 if num_datapoints_tr % self.batch_size == 0 else 1)
@@ -327,7 +334,7 @@ class Interpreter:
         sota_acc_new_fns_states = dict()
         sota_acc = -sys.float_info.max
         sota_var = 0
-        sota_grad = list()
+        sota_grad = None
         sota_idx = None
         sota_mse = None
         accuracies_val = list()
@@ -358,7 +365,7 @@ class Interpreter:
             print("Starting epoch ", epoch)
             iter_in_one_epoch = 0
             prob_all, metric_all = 0, list()
-            for y_pred, y, x_in in self._predict_data(program, data_loader_tr, new_fns_dict):
+            for y_pred, y, x_in in self._predict_data(program, data_loader_trn, new_fns_dict):
                 # for i in range(12):
                 #     dt_num = y.shape[0] // 12
                 #     if not np.all(y[i * dt_num: (i + 1) * dt_num, -1].detach().cpu().numpy() == i):
@@ -386,17 +393,17 @@ class Interpreter:
             for _, value in new_fns_dict.items():
                 value.eval()
 
-            if epoch == 7:
-                val_mse, sota_grad = self._get_accuracy(program,
-                                                        data_loader_val,
-                                                        output_type,
-                                                        new_fns_dict,
-                                                        compute_grad=is_lganm)[:2]
-                sota_grad *= parm_do[0][0].detach().cpu().numpy()
-                prob_idx = np.argsort(sota_grad).tolist()
+            if epoch <= 7:
+                val_mse, val_grad = self._get_accuracy(program,
+                                                       data_loader_val,
+                                                       output_type,
+                                                       new_fns_dict,
+                                                       compute_grad=is_lganm)[:2]
+                # sota_grad *= parm_do[0][0].detach().cpu().numpy()
+                # prob_idx = np.argsort(sota_grad).tolist()
                 #sota_mse = val_mse
                 #sota_acc = -np.mean(sota_mse)
-                #for new_fn_name, new_fn in new_fns_dict.items():
+                # for new_fn_name, new_fn in new_fns_dict.items():
                 #    sota_acc_new_fns_states[new_fn_name] = self._clone_hidden_state(new_fn.state_dict())
                 #print(sota_grad, prob_idx)
 
@@ -407,7 +414,7 @@ class Interpreter:
                                              new_fns_dict)[0]
 
             tst_mse = self._get_accuracy(program,
-                                         data_loader_test,
+                                         data_loader_tst,
                                          output_type,
                                          new_fns_dict)[0]
 
@@ -423,6 +430,9 @@ class Interpreter:
                 for new_fn_name, new_fn in new_fns_dict.items():
                     sota_acc_new_fns_states[new_fn_name] = self._clone_hidden_state(
                         new_fn.state_dict())
+                if epoch <= 7:
+                    sota_grad = val_grad * parm_do[0][0].detach().cpu().numpy()
+                    prob_idx = np.argsort(sota_grad).tolist()
 
             if parm_do and epoch > 7:
                 wass_dis, cur_mean = self._wass(val_mse, sota_mse)
@@ -512,26 +522,29 @@ class Interpreter:
                   program: str,
                   output_type: ProgramOutputType,
                   unknown_fns_def: List[Dict] = None,
-                  io_examples_tr=None,
+                  io_examples_trn=None,
                   io_examples_val=None,
-                  io_examples_test=None,
+                  io_examples_tst=None,
                   dbg_learn_parameters=True):
         """
         Independent from the synthesizer
         :param program:
         :param output_type:
         :param unknown_fns_def:
-        :param io_examples_tr:
+        :param io_examples_trn:
         :param io_examples_val:
-        :param io_examples_test:
+        :param io_examples_tst:
         :param dbg_learn_parameters: if False, it's not going to learn parameters
         :return:
         """
         # either io_examples_val is a tuple, or a list of tuples. handle accordingly.
         # a = issubclass(NumpyDataSetIterator, NumpyDataSetIterator)
-        data_loader_tr = self._get_data_loader(io_examples_tr)
-        data_loader_val = self._get_data_loader(io_examples_val)
-        data_loader_test = self._get_data_loader(io_examples_test)
+        data_loader_trn = self._get_data_loader(io_examples_trn,
+                                                self.trn_size)
+        data_loader_val = self._get_data_loader(io_examples_val,
+                                                self.val_size)
+        data_loader_tst = self._get_data_loader(io_examples_tst,
+                                                self.tst_size)
         assert(type(output_type) == ProgramOutputType)
 
         new_fns_dict = {}
@@ -549,9 +562,9 @@ class Interpreter:
                     new_fns_dict, val_acc, evaluations_np = self.learn_neural_network(program,
                                                                                       output_type,
                                                                                       unknown_fns_def,
-                                                                                      data_loader_tr,
+                                                                                      data_loader_trn,
                                                                                       data_loader_val,
-                                                                                      data_loader_test)
+                                                                                      data_loader_tst)
             val_acc = self._get_accuracy(program,
                                          data_loader_val,
                                          output_type,
@@ -559,7 +572,7 @@ class Interpreter:
                                          compute_grad=is_lganm)
 
             test_acc = self._get_accuracy(program,
-                                          data_loader_test,
+                                          data_loader_tst,
                                           output_type,
                                           new_fns_dict)
             val_accuracy.append(np.mean(val_acc[0]))
@@ -594,9 +607,9 @@ class Interpreter:
                  program,
                  output_type_s,
                  unkSortMap=None,
-                 io_examples_tr=None,
+                 io_examples_trn=None,
                  io_examples_val=None,
-                 io_examples_test=None,
+                 io_examples_tst=None,
                  dbg_learn_parameters=True) -> dict:
 
         is_graph = type(output_type_s) == AST.PPGraphSort
@@ -611,9 +624,9 @@ class Interpreter:
         res = self.evaluate_(program=program_str,
                              output_type=output_type,
                              unknown_fns_def=unknown_fns_def,
-                             io_examples_tr=io_examples_tr,
+                             io_examples_trn=io_examples_trn,
                              io_examples_val=io_examples_val,
-                             io_examples_test=io_examples_test,
+                             io_examples_tst=io_examples_tst,
                              dbg_learn_parameters=dbg_learn_parameters)
         return res
 

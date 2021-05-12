@@ -75,7 +75,7 @@ def main():
     res = interpreter.evaluate(program=prog,
                                output_type_s=fn_sort.rtpe,
                                unkSortMap=unkSortMap,
-                               io_examples_tr=tio,
+                               io_examples_trn=tio,
                                io_examples_val=vio)
 
 

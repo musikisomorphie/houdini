@@ -27,7 +27,7 @@ def _debug_info(prog: PPTerm, unkSortMap, lib: FnLibrary, fnSort: PPSort):
     lib_items = [PPLibItem(li.name, li.sort, None)
                  for (_, li) in lib.items.items()]
     dprog = """
-    io_examples_tr, io_examples_val = None, None
+    io_examples_trn, io_examples_val = None, None
     prog = %s
     unkSortMap = %s
     lib = NewLibrary()
@@ -37,7 +37,7 @@ def _debug_info(prog: PPTerm, unkSortMap, lib: FnLibrary, fnSort: PPSort):
     res = interpreter.evaluate(program=prog,
                                         output_type_s=fn_sort.rtpe,
                                         unkSortMap=unkSortMap,
-                                        io_examples_tr=io_examples_tr,
+                                        io_examples_trn=io_examples_trn,
                                         io_examples_val=io_examples_val)
     """ % (str(prog), str(unkSortMap), str(lib_items), str(fnSort))
 
@@ -107,9 +107,9 @@ class NeuralSynthesizerEA:
         res = self.interpreter.evaluate(program=prog,
                                         output_type_s=output_type,
                                         unkSortMap=unkSortMap,
-                                        io_examples_tr=ioExamplesTr,
+                                        io_examples_trn=ioExamplesTr,
                                         io_examples_val=ioExamplesVal,
-                                        io_examples_test=ioExamplesTest)
+                                        io_examples_tst=ioExamplesTest)
         print('END_EVALUATE, Time: %s' % getElapsedTime())
         eEnd = time.time()
         print("TIME_TAKEN_EVALUATE, %s" % formatTime(eEnd - eStart))

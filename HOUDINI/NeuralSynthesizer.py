@@ -36,7 +36,7 @@ def _debug_info(prog: PPTerm, unkSortMap, lib: FnLibrary, fnSort: PPSort):
     lib_items = [PPLibItem(li.name, li.sort, None)
                  for (_, li) in lib.items.items()]
     dprog = """
-    io_examples_tr, io_examples_val = None, None
+    io_examples_trn, io_examples_val = None, None
     prog = %s
     unkSortMap = %s
     lib = NewLibrary()
@@ -46,7 +46,7 @@ def _debug_info(prog: PPTerm, unkSortMap, lib: FnLibrary, fnSort: PPSort):
     res = interpreter.evaluate(program=prog,
                                         output_type_s=fn_sort.rtpe,
                                         unkSortMap=unkSortMap,
-                                        io_examples_tr=io_examples_tr,
+                                        io_examples_trn=io_examples_trn,
                                         io_examples_val=io_examples_val)
     """ % (str(prog), str(unkSortMap), str(lib_items), str(fnSort))
 
@@ -123,16 +123,16 @@ class NeuralSynthesizer:
         pEnd = time.time()
         print("TIME_TAKEN_SYNTH, %s" % formatTime(pEnd - pStart))
 
-    def interpret(self, prog, unkSortMap, io_examples_tr, io_examples_val, io_examples_test) -> Dict:
+    def interpret(self, prog, unkSortMap, io_examples_trn, io_examples_val, io_examples_tst) -> Dict:
         output_type = self.sort.rtpe
         print('BEGIN_EVALUATE, Time: %s' % getElapsedTime())
         eStart = time.time()
         res = self.interpreter.evaluate(program=prog,
                                         output_type_s=output_type,
                                         unkSortMap=unkSortMap,
-                                        io_examples_tr=io_examples_tr,
+                                        io_examples_trn=io_examples_trn,
                                         io_examples_val=io_examples_val,
-                                        io_examples_test=io_examples_test,
+                                        io_examples_tst=io_examples_tst,
                                         dbg_learn_parameters=self.dbg_learn_parameters)
         print('END_EVALUATE, Time: %s' % getElapsedTime())
         eEnd = time.time()
@@ -149,13 +149,13 @@ class NeuralSynthesizer:
         for i in range(1, top_k_solutions_results.__len__()):
             top_k_solutions_results[i][1]["new_fns_dict"] = None
 
-    def solve(self, io_examples_tr, io_examples_val, io_examples_test) -> List[Tuple[PPTerm, float]]:
+    def solve(self, io_examples_trn, io_examples_val, io_examples_tst) -> List[Tuple[PPTerm, float]]:
         top_k_solutions_results = []
 
         for prog, unkSortMap in self.prog_unkinfo_tuples:
             try:
                 interpreter_res = self.interpret(
-                    prog, unkSortMap, io_examples_tr, io_examples_val, io_examples_test)
+                    prog, unkSortMap, io_examples_trn, io_examples_val, io_examples_tst)
             # except NotHandledException as e:
             #     self.log_unhandled_program(prog)
             #     continue
