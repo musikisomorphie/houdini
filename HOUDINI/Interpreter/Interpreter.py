@@ -161,11 +161,11 @@ class Interpreter:
         """
 
         # list of data_loader_iterators
-        if isinstance(data_loader, NumpyDataSetIterator):
-            data_loader_list = [data_loader]
+        if issubclass(type(data_loader), NumpyDataSetIterator):
+            data_loader = [data_loader]
 
         # creating a shallow copy of the list of iterators
-        dl_iters_list = list(data_loader_list)
+        dl_iters_list = list(data_loader)
         while dl_iters_list.__len__() > 0:
             data_sample = None
             while data_sample is None and dl_iters_list.__len__() > 0:
@@ -181,16 +181,12 @@ class Interpreter:
             if data_sample is not None:
                 x, y = data_sample
                 x = torch.from_numpy(x)
-                x = autograd.Variable(x)
-
                 y = torch.from_numpy(y)
                 y = torch.cat(torch.split(y, 1, dim=1), dim=0).squeeze(dim=1)
-                y = autograd.Variable(y)
-
-                if torch.cuda.is_available():
-                    x = x.cuda()
-                    y = y.cuda()
-
+                x = autograd.Variable(
+                    x).cuda() if torch.cuda.is_available() else autograd.Variable(x)
+                y = autograd.Variable(
+                    y).cuda() if torch.cuda.is_available() else autograd.Variable(y)
                 global_vars = {"lib": self.library}
                 global_vars = {**global_vars, **new_fns_dict}
                 y_pred = eval(program, global_vars)(x.float())
