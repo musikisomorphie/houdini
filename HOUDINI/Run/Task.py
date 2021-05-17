@@ -162,7 +162,8 @@ _TaskSettings = NamedTuple('TaskSettings', [
     ('batch_size', int),
     ('dbg_learn_parameters', bool),  # If False, it won't learn new parameters
     ('learning_rate', float),
-    ('data_dict', dict)
+    ('warm_up', int), # warm-up epoches
+    ('data_dict', dict),
 ])
 
 
