@@ -594,7 +594,8 @@ class Interpreter:
             #                               data_loader_tst,
             #                               output_type,
             #                               new_fns_dict)
-            val_accuracy.append(val_acc[0])
+            # val_accuracy.append(val_acc[0])
+            val_accuracy.append(0.)
             # test_accuracy.append(np.var(test_acc[0]))
         #     if output_type == ProgramOutputType.HAZARD:
         #         cox_grads.append(val_acc[1])
