@@ -10,7 +10,7 @@ from scipy import stats
 from typing import List, Dict, Optional, Tuple, Union, Iterator
 import torch
 import torch.nn.functional as F
-from torch import autograd
+from torch import autograd, nn
 
 from Data.DataGenerator import NumpyDataSetIterator
 from HOUDINI.Library import Loss, Metric
@@ -59,25 +59,26 @@ class Interpreter:
         else:
             self.var_num = self.data_dict['mid_size'] - 2
 
-    @classmethod
-    def create_nns(cls, unknown_fns: List[Dict]) -> Tuple[Dict, Dict]:
-        """ Instantiate the unknown functions with nn,
-        obtain the trainable parameters for direct access 
-        during training.
+    def _create_fns(self, unknown_fns: List[Dict]) -> Tuple[Dict, Dict]:
+        """ Instantiate the higher-oder functions, 
+        unknown functions with nn, obtain the trainable parameters 
+        for direct access during training.
 
         Args:
             unknow_fns: the list of the unknown functions
 
         Returns:
-            the dict of instantiated nn functions
+            the dict of instantiated nn functions and 
+                higher-order functions
             the dict of their trainable parameters
         """
         trainable_parameters = {'do': list(),
                                 'non-do': list()}
-        new_fns_dict = dict()
+        prog_fns_dict = dict()
+        prog_fns_dict['lib'] = self.library
         for uf in unknown_fns:
             fns_nn = NNUtils.get_nn_from_params_dict(uf)
-            new_fns_dict[uf["name"]] = fns_nn[0]
+            prog_fns_dict[uf["name"]] = fns_nn[0]
             c_trainable_params = fns_nn[1]
             if "freeze" in uf and uf["freeze"]:
                 print("freezing the weight of {}".format(uf["name"]))
@@ -86,7 +87,7 @@ class Interpreter:
                 trainable_parameters['do'] += list(c_trainable_params)
             else:
                 trainable_parameters['non-do'] += list(c_trainable_params)
-        return new_fns_dict, trainable_parameters
+        return prog_fns_dict, trainable_parameters
 
     def _get_data_loader(self,
                          io_examples: tuple,
@@ -106,14 +107,46 @@ class Interpreter:
                                           io_examples[1],
                                           batch)
         else:
-            raise NotImplementedError(
-                'Processing the data type {} is not implemented'.format(type(io_examples)))
+            raise NotImplementedError('The function that processes '
+                                      'the data type {} is not implemented'.format(type(io_examples)))
         return output
+
+    def _clone_weights_state(self, src_dict: Dict, tar_dict: Dict):
+        """ Deep copy the state_dict of the learnable weights
+        from the source dict to target dict
+
+        Args:
+            src_dict: source dictionary
+            tar_dict: target dictionary
+
+        Returns:
+        """
+
+        for new_fn_name, new_fn in src_dict.items():
+            if issubclass(type(new_fn), nn.Module):
+                new_state = OrderedDict()
+                for key, val in new_fn.state_dict().items():
+                    new_state[key] = val.clone()
+                tar_dict[new_fn_name] = new_state
+
+    def _set_weights_mode(self, fns_dict: Dict, is_trn: bool):
+        """ Switch the weights mode between train and eval
+
+        Args:
+            fns_dict: nn function dictionary storing the learnable weights
+            is_trn: is train or not 
+
+        Returns:
+
+        """
+        for _, fns in fns_dict.items():
+            if issubclass(type(fns), nn.Module):
+                fns.train() if is_trn else fns.eval()
 
     def _compute_grad(self,
                       inputs: torch.Tensor,
                       program: str,
-                      global_vars: dict) -> torch.Tensor:
+                      prog_fns_dict: dict) -> torch.Tensor:
         """ Compute the gradients of the nn w.r.t the inputs,
         the nn is instantiated by the program string and its 
         corresponding function stored in global vars.
@@ -123,7 +156,7 @@ class Interpreter:
             program: the program string, for example:
                 'lib.compose(nn_fun_idef_np_tdidef_58, 
                              lib.cat(lib.do(nn_fun_idef_np_tdidef_59)))'
-            global_vars: the dict with the key of the function in the 
+            prog_fns_dict: the dict with the key of the function in the 
                 program string, and the value of the function implmentation
 
         Returns:
@@ -131,7 +164,7 @@ class Interpreter:
         """
 
         inputs = autograd.Variable(inputs, requires_grad=True)
-        outputs = eval(program, global_vars)(inputs)
+        outputs = eval(program, prog_fns_dict)(inputs)
         if type(outputs) == tuple:
             outputs = outputs[0]
         grad_outputs = torch.ones(outputs.shape)
@@ -148,7 +181,7 @@ class Interpreter:
     def _predict_data(self,
                       data_loader: NumpyDataSetIterator,
                       program: str,
-                      global_vars: dict) -> Iterator[Tuple]:
+                      prog_fns_dict: dict) -> Iterator[Tuple]:
         """ The core learning step for each iteration, i.e.
         feed one batch data to the nn and compute the output.
 
@@ -157,7 +190,7 @@ class Interpreter:
             program: the program string, for example:
                 'lib.compose(nn_fun_idef_np_tdidef_58, 
                              lib.cat(lib.do(nn_fun_idef_np_tdidef_59)))'
-            global_vars: the dict with the key of the function in the 
+            prog_fns_dict: the dict with the key of the function in the 
                 program string, and the value of the function implmentation
 
         Returns:
@@ -195,14 +228,14 @@ class Interpreter:
                     x = x.cuda()
                     y = y.cuda()
 
-                y_pred = eval(program, global_vars)(x.float())
+                y_pred = eval(program, prog_fns_dict)(x.float())
                 yield (y_pred, y.float(), x.float())
 
     def _get_accuracy(self,
                       output_type: ProgramOutputType,
                       data_loader: NumpyDataSetIterator,
                       program: str,
-                      global_vars: dict,
+                      prog_fns_dict: dict,
                       compute_grad: bool = False) -> Tuple:
         """ Compute the relevant metric for trained model
 
@@ -213,7 +246,7 @@ class Interpreter:
             program: the program string, for example:
                 'lib.compose(nn_fun_idef_np_tdidef_58,
                              lib.cat(lib.do(nn_fun_idef_np_tdidef_59)))'
-            global_vars: the dict with the key of the function in the
+            prog_fns_dict: the dict with the key of the function in the
                 program string, and the value of the function implmentation
             compute_grad: whether compute (mean) gradients or not, False by default 
 
@@ -232,7 +265,7 @@ class Interpreter:
         debug_y = list()
         y_pred_all, y_all, grad_all = list(), list(), list()
         mse_out, grad_out, score_out = list(), None, None
-        for y_pred, y, x_in in self._predict_data(data_loader, program, global_vars):
+        for y_pred, y, x_in in self._predict_data(data_loader, program, prog_fns_dict):
             if isinstance(y_pred, tuple):
                 y_pred = y_pred[0]
 
@@ -254,7 +287,7 @@ class Interpreter:
             if compute_grad:
                 x_grads = self._compute_grad(x_in.clone(),
                                              program,
-                                             global_vars)
+                                             prog_fns_dict)
                 x_grads = torch.cat(torch.split(
                     x_grads, 1, dim=1), dim=0).squeeze()
                 x_grads_norm = x_grads.abs().mean(dim=0)
@@ -282,7 +315,7 @@ class Interpreter:
                 g_in = g_in.cuda()
             cox_grads = self._compute_grad(g_in,
                                            program,
-                                           global_vars)
+                                           prog_fns_dict)
 
             cox_grads = cox_grads.cpu().numpy()
             cox_grads = np.squeeze(cox_grads)
@@ -296,20 +329,6 @@ class Interpreter:
                 grad_out = grad_out / grad_out.sum()
 
         return mse_out, grad_out, score_out
-
-    def _clone_hidden_state(self, state: Dict) -> Dict:
-        """ Deep copy the state_dict of the learnable weights
-
-        Args:
-            state: the pytorch state_dict
-
-        Returns:
-            the cloned state_dict()
-        """
-        result = OrderedDict()
-        for key, val in state.items():
-            result[key] = val.clone()
-        return result
 
     def learn_neural_network(self,
                              program,
@@ -349,7 +368,7 @@ class Interpreter:
         max_accuracy = -sys.float_info.max
         # a dictionary of state_dicts for each new neural module
         max_accuracy_new_fns_states = dict()
-        sota_acc_new_fns_states = dict()
+        sota_fns_dict = dict()
         sota_acc = -sys.float_info.max
         sota_var = 0
         sota_grad = None
@@ -359,18 +378,12 @@ class Interpreter:
         accuracies_test = list()
         iterations = list()
 
-        new_fns_dict, trainable_parameters = self.create_nns(unknown_fns)
-        global_vars = {"lib": self.library}
-        global_vars = {**global_vars, **new_fns_dict}
+        prog_fns_dict, trainable_parameters = self._create_fns(unknown_fns)
         parm_all = trainable_parameters['do'] + trainable_parameters['non-do']
         parm_do = trainable_parameters['do']
         optim_all = torch.optim.Adam(parm_all,
                                      lr=self.lr,
                                      weight_decay=0.001)
-
-        # set all new functions to train mode
-        for _, value in new_fns_dict.items():
-            value.train()
 
         current_iteration = 0
         reject_var = set()
@@ -378,12 +391,12 @@ class Interpreter:
         epoch = 0
         has_trained_more = False
         is_lganm = self.data_dict['dict_name'].lower() == 'lganm'
-        # for epoch in range(self.epochs):
         while len(accept_var) + len(reject_var) < 11:
             print("Starting epoch ", epoch)
             iter_in_one_epoch = 0
             prob_all, metric_all = 0, list()
-            for y_pred, y, x_in in self._predict_data(data_loader_trn, program, global_vars):
+            self._set_weights_mode(prog_fns_dict, is_trn=True)
+            for y_pred, y, x_in in self._predict_data(data_loader_trn, program, prog_fns_dict):
                 # for i in range(12):
                 #     dt_num = y.shape[0] // 12
                 #     if not np.all(y[i * dt_num: (i + 1) * dt_num, -1].detach().cpu().numpy() == i):
@@ -408,33 +421,32 @@ class Interpreter:
                 iter_in_one_epoch += 1
                 current_iteration += 1
 
-            for _, value in new_fns_dict.items():
-                value.eval()
+            self._set_weights_mode(prog_fns_dict, is_trn=False)
 
             if epoch <= 7:
                 val_mse, val_grad = self._get_accuracy(output_type,
                                                        data_loader_val,
                                                        program,
-                                                       global_vars,
+                                                       prog_fns_dict,
                                                        compute_grad=is_lganm)[:2]
                 # sota_grad *= parm_do[0][0].detach().cpu().numpy()
                 # prob_idx = np.argsort(sota_grad).tolist()
                 #sota_mse = val_mse
                 #sota_acc = -np.mean(sota_mse)
                 # for new_fn_name, new_fn in new_fns_dict.items():
-                #    sota_acc_new_fns_states[new_fn_name] = self._clone_hidden_state(new_fn.state_dict())
+                #    sota_fns_dict[new_fn_name] = self._clone_hidden_state(new_fn.state_dict())
                 #print(sota_grad, prob_idx)
 
             else:
                 val_mse = self._get_accuracy(output_type,
                                              data_loader_val,
                                              program,
-                                             global_vars)[0]
+                                             prog_fns_dict)[0]
 
             tst_mse = self._get_accuracy(output_type,
                                          data_loader_tst,
                                          program,
-                                         global_vars)[0]
+                                         prog_fns_dict)[0]
 
             val_acc = -np.mean(val_mse)
             val_var = np.var(val_mse)
@@ -445,9 +457,8 @@ class Interpreter:
                 sota_acc = val_acc
                 sota_var = val_var
                 sota_mse = val_mse
-                for new_fn_name, new_fn in new_fns_dict.items():
-                    sota_acc_new_fns_states[new_fn_name] = self._clone_hidden_state(
-                        new_fn.state_dict())
+                self._clone_weights_state(prog_fns_dict,
+                                          sota_fns_dict)
                 if epoch <= 7:
                     sota_grad = val_grad * parm_do[0][0].detach().cpu().numpy()
                     prob_idx = np.argsort(sota_grad).tolist()
@@ -462,16 +473,16 @@ class Interpreter:
                     else:
                         has_trained_more = False
                         accept_var.add(sota_idx)
-                        for new_fn_name, new_fn in new_fns_dict.items():
-                            new_fn.load_state_dict(
-                                sota_acc_new_fns_states[new_fn_name])
+                        for new_fn_name, new_fn in prog_fns_dict.items():
+                            if issubclass(type(new_fn), nn.Module):
+                                new_fn.load_state_dict(
+                                    sota_fns_dict[new_fn_name])
                 else:
                     if has_trained_more:
                         has_trained_more = False
                     reject_var.add(sota_idx)
-                    for new_fn_name, new_fn in new_fns_dict.items():
-                        sota_acc_new_fns_states[new_fn_name] = self._clone_hidden_state(
-                            new_fn.state_dict())
+                    self._clone_weights_state(prog_fns_dict,
+                                              sota_fns_dict)
 
                 print(sota_idx, sota_acc, wass_dis,
                       accept_var, reject_var)
@@ -489,19 +500,19 @@ class Interpreter:
                             break
 
             # set all new functions to train mode
-            for _, value in new_fns_dict.items():
-                value.train()
+            # for _, value in prog_fns_dict.items():
+            #     value.train()
 
             accuracies_val.append(val_acc)
             accuracies_test.append(tst_acc)
             iterations.append(current_iteration)
 
-            if max_accuracy < val_acc:
-                max_accuracy = val_acc
-                # store the state_dictionary of the best performing model
-                for new_fn_name, new_fn in new_fns_dict.items():
-                    max_accuracy_new_fns_states[new_fn_name] = self._clone_hidden_state(
-                        new_fn.state_dict())
+            # if max_accuracy < val_acc:
+            #     max_accuracy = val_acc
+            #     # store the state_dictionary of the best performing model
+            #     for new_fn_name, new_fn in prog_fns_dict.items():
+            #         max_accuracy_new_fns_states[new_fn_name] = self._clone_hidden_state(
+            #             new_fn.state_dict())
 
             epoch += 1
         print('sota_accuracy_found_during_training:', sota_acc)
@@ -513,8 +524,8 @@ class Interpreter:
         #     new_fn.load_state_dict(max_accuracy_new_fns_states[new_fn_name])
 
         # set all new functions to eval mode
-        for key, value in new_fns_dict.items():
-            value.eval()
+        # for key, value in prog_fns_dict.items():
+        #     value.eval()
 
         num_evaluations = accuracies_val.__len__()
         evaluations_np = np.ones((num_evaluations, 3), dtype=np.float32)
@@ -535,7 +546,7 @@ class Interpreter:
         self.data_dict['likelihood'] = torch.sigmoid(
             parm_do[0][0]).detach().cpu().numpy()
         self.data_dict['grads'] = sota_grad
-        return new_fns_dict, max_accuracy, evaluations_np
+        return prog_fns_dict, 0., evaluations_np
 
     def evaluate_(self,
                   program: str,
@@ -566,7 +577,7 @@ class Interpreter:
                                                 self.tst_size)
         assert(type(output_type) == ProgramOutputType)
 
-        new_fns_dict = {}
+        prog_fns_dict = {}
         val_accuracy, test_accuracy = list(), list()
         cox_scores, cox_grads = list(), list()
         probs = list()
@@ -576,14 +587,14 @@ class Interpreter:
             evaluations_np = np.ones((1, 1))
             if unknown_fns_def is not None and unknown_fns_def.__len__() > 0:
                 if not dbg_learn_parameters:
-                    new_fns_dict, _ = self.create_nns(unknown_fns_def)
+                    prog_fns_dict, _ = self._create_fns(unknown_fns_def)
                 else:
-                    new_fns_dict, val_acc, evaluations_np = self.learn_neural_network(program,
-                                                                                      output_type,
-                                                                                      unknown_fns_def,
-                                                                                      data_loader_trn,
-                                                                                      data_loader_val,
-                                                                                      data_loader_tst)
+                    prog_fns_dict, val_acc, evaluations_np = self.learn_neural_network(program,
+                                                                                       output_type,
+                                                                                       unknown_fns_def,
+                                                                                       data_loader_trn,
+                                                                                       data_loader_val,
+                                                                                       data_loader_tst)
             # val_acc = self._get_accuracy(program,
             #                              data_loader_val,
             #                              output_type,
@@ -619,7 +630,7 @@ class Interpreter:
         # self.data_dict['grads'] = val_acc[1]
         # print('validation accuracy: {}'.format(val_accuracy))
         # print('test accuracy: {}'.format(test_accuracy))
-        return {'accuracy': val_accuracy, 'new_fns_dict': new_fns_dict,
+        return {'accuracy': val_accuracy, 'prog_fns_dict': prog_fns_dict,
                 'test_accuracy': val_accuracy, 'evaluations_np': evaluations_np}
 
     # program=st, output_type=output_type, unkSortMap=unkSortMap, io_examples=self.ioExamples
