@@ -55,6 +55,18 @@ class Interpreter:
         self.lr = settings.learning_rate
         self.warm_up = settings.warm_up
 
+        if self.data_dict['out_type'] == 'hazard':
+            self.output_type = ProgramOutputType.HAZARD
+            self.criterion = Loss.cox_ph_loss
+            self.metric = Loss.cox_ph_loss
+        elif self.data_dict['out_type'] == 'integer':
+            self.output_type = ProgramOutputType.INTEGER
+            self.criterion = nn.MSELoss(reduction='none')
+            self.metric = F.mse_loss
+        else:
+            raise TypeError('invalid output type {}'.format(
+                self.data_dict['out_type']))
+
     def _create_fns(self, unknown_fns: List[Dict]) -> Tuple[Dict, Dict]:
         """ Instantiate the higher-oder functions, 
         unknown functions with nn, obtain the trainable parameters 
@@ -86,7 +98,7 @@ class Interpreter:
         return prog_fns_dict, trainable_parameters
 
     def _get_data_loader(self,
-                         io_examples: tuple,
+                         io_examples: Tuple,
                          batch: int) -> NumpyDataSetIterator:
         """ Wrap the data with the NumpyDataSetIterator class
 
@@ -142,7 +154,7 @@ class Interpreter:
     def _compute_grad(self,
                       inputs: torch.Tensor,
                       program: str,
-                      prog_fns_dict: dict) -> torch.Tensor:
+                      prog_fns_dict: Dict) -> torch.Tensor:
         """ Compute the gradients of the nn w.r.t the inputs,
         the nn is instantiated by the program string and its 
         corresponding function stored in global vars.
@@ -175,13 +187,28 @@ class Interpreter:
         return grads.detach()
 
     def _update_sota(self,
-                     sota_acc,
-                     sota_grad,
-                     sota_fns_dict,
-                     prog_fns_dict,
-                     val_mse,
-                     val_grad=None,
-                     parm_do=None):
+                     sota_acc: np.ndarray,
+                     sota_grad: np.ndarray,
+                     sota_fns_dict: Dict,
+                     prog_fns_dict: Dict,
+                     val_mse: np.ndarray,
+                     val_grad: Optional[np.ndarray] = None,
+                     parm_do: Optional[torch.Tensor] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict]:
+        """ update the sota metric by comparing with the metric of current epoch.
+
+        Args:
+            sota_acc: the sota accuracy 
+            sota_grad: the sota gradients of the program
+            sota_fns_dict: the dict storing the sota state of the learnable weights
+            prog_fns_dict: the dict storing the current state of the learnable weights
+            val_mse: the validation mse (usually a n-dim numpy array)
+            val_grad: the current gradients of the program
+            parm_do: the weights of the do function
+
+        Returns:
+            the updated sota metrics
+        """
+
         sota_acc = -np.mean(val_mse)
         sota_mse = val_mse
         self._clone_weights_state(prog_fns_dict,
@@ -193,7 +220,7 @@ class Interpreter:
     def _predict_data(self,
                       data_loader: NumpyDataSetIterator,
                       program: str,
-                      prog_fns_dict: dict) -> Iterator[Tuple]:
+                      prog_fns_dict: Dict) -> Iterator[Tuple]:
         """ The core learning step for each iteration, i.e.
         feed one batch data to the nn and compute the output.
 
@@ -247,27 +274,38 @@ class Interpreter:
                     data_loader: NumpyDataSetIterator,
                     program: str,
                     prog_fns_dict: Dict,
-                    criterion,
-                    optim):
+                    optim: torch.optim):
+        """ Train the data for one epoch 
+
+        Args:
+            data_loader: the data iterator that can generate a batch of data 
+            program: the program string, for example:
+                'lib.compose(nn_fun_idef_np_tdidef_58, 
+                             lib.cat(lib.do(nn_fun_idef_np_tdidef_59)))'
+            prog_fns_dict: the dict with the key of the function in the 
+                program string, and the value of the function implmentation
+            criterion: the loss function
+            optim: pytorch optimizer
+
+        Returns:
+        """
+
         for y_pred, y, x_in in self._predict_data(data_loader, program, prog_fns_dict):
             if type(y_pred) == tuple:
                 y_pred = y_pred[0]
-            loss = criterion(y_pred, y)
+            loss = self.criterion(y_pred, y)
             optim.zero_grad()
             (loss.mean()).backward(retain_graph=True)
             optim.step()
 
     def _get_accuracy(self,
-                      output_type: ProgramOutputType,
                       data_loader: NumpyDataSetIterator,
                       program: str,
-                      prog_fns_dict: dict,
+                      prog_fns_dict: Dict,
                       compute_grad: bool = False) -> Tuple:
         """ Compute the relevant metric for trained model
 
         Args:
-            output_type: the type of output, this determines the metric used
-                for each type
             data_loader: the data iterator that can generate a batch of data
             program: the program string, for example:
                 'lib.compose(nn_fun_idef_np_tdidef_58,
@@ -281,13 +319,6 @@ class Interpreter:
                 the other scores can be cox scores if portec, None else.
         """
 
-        if output_type == ProgramOutputType.INTEGER:
-            metric = F.mse_loss
-        elif output_type == ProgramOutputType.HAZARD:
-            metric = Loss.cox_ph_loss
-        else:
-            raise TypeError('Unknown output type {}'.format(output_type))
-
         debug_y = list()
         y_pred_all, y_all, grad_all = list(), list(), list()
         mse_out, grad_out, score_out = list(), None, None
@@ -295,9 +326,9 @@ class Interpreter:
             if isinstance(y_pred, tuple):
                 y_pred = y_pred[0]
 
-            torch_mse = metric(y_pred,
-                               y,
-                               reduction='none')
+            torch_mse = self.metric(y_pred,
+                                    y,
+                                    reduction='none')
             torch_mse = torch_mse.detach().cpu().numpy()
             # np.split is different to torch.split
             torch_mse = np.split(torch_mse, x_in.shape[1], axis=0)
@@ -327,7 +358,7 @@ class Interpreter:
         #     debug = np.concatenate(debug, axis=0)
         #     assert np.all(debug == debug_id)
 
-        if output_type == ProgramOutputType.HAZARD:
+        if self.output_type == ProgramOutputType.HAZARD:
             y_all_np = torch.cat(y_all, dim=0).detach().cpu().numpy()
             y_pred_all_np = torch.cat(
                 y_pred_all, dim=0).detach().cpu().numpy()
@@ -349,7 +380,7 @@ class Interpreter:
             grad_out = cox_grads
             score_out = cox_scores
         else:
-            if grad_all and output_type == ProgramOutputType.INTEGER:
+            if grad_all and self.output_type == ProgramOutputType.INTEGER:
                 grad_all = np.asarray(grad_all)
                 grad_out = np.mean(grad_all, axis=0)
                 grad_out = grad_out / grad_out.sum()
@@ -358,18 +389,10 @@ class Interpreter:
 
     def learn_neural_network(self,
                              program: str,
-                             output_type: ProgramOutputType,
                              unknown_fns: List[Dict],
                              data_loader_trn: NumpyDataSetIterator,
                              data_loader_val: NumpyDataSetIterator,
                              data_loader_tst: NumpyDataSetIterator) -> Dict:
-
-        if output_type == ProgramOutputType.INTEGER:
-            criterion = nn.MSELoss(reduction='none')
-        elif output_type == ProgramOutputType.HAZARD:
-            criterion = Loss.cox_ph_loss
-        else:
-            raise TypeError('Unknown output type {}'.format(output_type))
 
         prog_fns_dict, trainable_parameters = self._create_fns(unknown_fns)
         parm_all = trainable_parameters['do'] + trainable_parameters['non-do']
@@ -381,22 +404,20 @@ class Interpreter:
         ###################################################################
         ########################Warm-Up Training###########################
         ###################################################################
-        sota_fns_dict = dict()
         sota_acc = -sys.float_info.max
-        sota_grad = None
         sota_mse = None
+        sota_grad = None
+        sota_fns_dict = dict()
         for epoch in range(self.warm_up):
             print('Starting warm-up epoch {}'.format(epoch))
             self._set_weights_mode(prog_fns_dict, is_trn=True)
             self._train_data(data_loader_trn,
                              program,
                              prog_fns_dict,
-                             criterion,
                              optim_all)
 
             self._set_weights_mode(prog_fns_dict, is_trn=False)
-            val_mse, val_grad = self._get_accuracy(output_type,
-                                                   data_loader_val,
+            val_mse, val_grad = self._get_accuracy(data_loader_val,
                                                    program,
                                                    prog_fns_dict,
                                                    compute_grad=True)[:2]
@@ -433,12 +454,10 @@ class Interpreter:
             self._train_data(data_loader_trn,
                              program,
                              prog_fns_dict,
-                             criterion,
                              optim_all)
 
             self._set_weights_mode(prog_fns_dict, is_trn=False)
-            val_mse = self._get_accuracy(output_type,
-                                         data_loader_val,
+            val_mse = self._get_accuracy(data_loader_val,
                                          program,
                                          prog_fns_dict)[0]
 
@@ -466,6 +485,7 @@ class Interpreter:
                 self._clone_weights_state(prog_fns_dict,
                                           sota_fns_dict)
             is_penalize_var = True
+
             print(sota_idx, sota_acc, wass_dis,
                   accept_var, reject_var)
             print(cur_mean, sota_grad)
@@ -489,7 +509,6 @@ class Interpreter:
 
     def evaluate_(self,
                   program: str,
-                  output_type: ProgramOutputType,
                   unknown_fns_def: List[Dict] = None,
                   io_examples_trn=None,
                   io_examples_val=None,
@@ -506,15 +525,12 @@ class Interpreter:
         :param dbg_learn_parameters: if False, it's not going to learn parameters
         :return:
         """
-        # either io_examples_val is a tuple, or a list of tuples. handle accordingly.
-        # a = issubclass(NumpyDataSetIterator, NumpyDataSetIterator)
         data_loader_trn = self._get_data_loader(io_examples_trn,
                                                 self.trn_size)
         data_loader_val = self._get_data_loader(io_examples_val,
                                                 self.val_size)
         data_loader_tst = self._get_data_loader(io_examples_tst,
                                                 self.tst_size)
-        assert(type(output_type) == ProgramOutputType)
 
         prog_fns_dict = {}
         val_accuracy, test_accuracy = list(), list()
@@ -529,24 +545,11 @@ class Interpreter:
                     prog_fns_dict, _ = self._create_fns(unknown_fns_def)
                 else:
                     prog_fns_dict = self.learn_neural_network(program,
-                                                              output_type,
                                                               unknown_fns_def,
                                                               data_loader_trn,
                                                               data_loader_val,
                                                               data_loader_tst)
-            # val_acc = self._get_accuracy(program,
-            #                              data_loader_val,
-            #                              output_type,
-            #                              new_fns_dict,
-            #                              compute_grad=is_lganm)
-
-            # test_acc = self._get_accuracy(program,
-            #                               data_loader_tst,
-            #                               output_type,
-            #                               new_fns_dict)
-            # val_accuracy.append(val_acc[0])
             val_accuracy.append(0.)
-            # test_accuracy.append(np.var(test_acc[0]))
         #     if output_type == ProgramOutputType.HAZARD:
         #         cox_grads.append(val_acc[1])
         #         cox_scores.append(val_acc[2])
@@ -572,7 +575,6 @@ class Interpreter:
         return {'accuracy': val_accuracy, 'prog_fns_dict': prog_fns_dict,
                 'test_accuracy': val_accuracy, 'evaluations_np': evaluations_np}
 
-    # program=st, output_type=output_type, unkSortMap=unkSortMap, io_examples=self.ioExamples
     def evaluate(self,
                  program,
                  output_type_s,
@@ -582,36 +584,16 @@ class Interpreter:
                  io_examples_tst=None,
                  dbg_learn_parameters=True) -> dict:
 
-        is_graph = type(output_type_s) == AST.PPGraphSort
-
         program_str = ReprUtils.repr_py(program)
-        output_type = self.get_program_output_type(io_examples_val,
-                                                   output_type_s)
-
-        unknown_fns_def = self.get_unknown_fns_definitions(unkSortMap,
-                                                           is_graph)
+        unknown_fns_def = self.get_unknown_fns_definitions(unkSortMap)
 
         res = self.evaluate_(program=program_str,
-                             output_type=output_type,
                              unknown_fns_def=unknown_fns_def,
                              io_examples_trn=io_examples_trn,
                              io_examples_val=io_examples_val,
                              io_examples_tst=io_examples_tst,
                              dbg_learn_parameters=dbg_learn_parameters)
         return res
-
-    def get_program_output_type(self,
-                                io_examples_val,
-                                output_sort):
-
-        if self.data_dict['out_type'] == 'hazard':
-            output_type = ProgramOutputType.HAZARD
-        elif self.data_dict['out_type'] == 'integer':
-            output_type = ProgramOutputType.INTEGER
-        else:
-            raise TypeError('invalid output type {}'.format(
-                self.data_dict['out_type']))
-        return output_type
 
     def _wass(self, res, cur_res):
         # bat_size = res.shape[0] // self.data_dict['env_num']
@@ -631,119 +613,12 @@ class Interpreter:
         # print(max(wass_dis))
         return max(wass_dis), np.mean(np.array(res))
 
-    def _conf_test(self, res, lab=None, rand_id=None, name='org'):
-        bat_size = res.shape[0] // self.data_dict['env_num']
-        p_vals_f, p_vals_t = list(), list()
-        for env in range(self.data_dict['env_num']):
-            msk = np.ones(res.shape[0], dtype=bool)
-            msk[env * bat_size: (env + 1) * bat_size] = False
-            x = res[msk].squeeze().cpu().numpy()
-            y = res[~msk].squeeze().cpu().numpy()
-            # lab_msk = lab[~msk]
-            # if not torch.all(lab_msk == lab_msk[0, 0]) and lab is not None:
-            #     print('false env', lab_msk)
-            # if rand_id in (1, 4, 7, 3):
-            # print(name, np.mean(x), np.mean(y), np.var(x), np.var(y))
-            x = x[np.isfinite(x)]
-            y = y[np.isfinite(y)]
-            F = np.var(x, ddof=1) / np.var(y, ddof=1)
-            p = stats.f.cdf(F, len(x)-1, len(y)-1)
-            p_vals_f.append(2*min(p, 1-p))
-            p_vals_t.append(stats.ttest_ind(x, y, equal_var=False).pvalue)
-            # break
-        p_value_f = min(p_vals_f) * self.data_dict['env_num']
-        p_value_t = min(p_vals_t) * self.data_dict['env_num']
-        print(p_value_f, p_value_t)
-        # res_split = torch.split(res, bat_size, dim=0)
-
-        # if rand_id is None:
-        #     res_stack = torch.stack(res_split, dim=0)
-        #     res_mean = torch.mean(res_stack, dim=1)
-        #     # res_var = torch.var(res_stack, dim=1)
-        #     min_id = torch.argmin(res_mean).detach()
-        #     max_id = torch.argmax(res_mean).detach()
-        #     rand_id = min_id
-
-        # rand_id = 0
-        # x = [res for res_id, res in enumerate(res_split) if res_id != rand_id]
-        # y = [res for res_id, res in enumerate(res_split) if res_id == rand_id]
-        # # print(type(x), type(y))
-        # if type(x) == list:
-        #     x = torch.cat(x, dim=0)
-        # x = x.squeeze().detach().cpu().numpy()
-
-        # if type(y) == list:
-        #     y = torch.cat(y, dim=0)
-        # y = y.squeeze().detach().cpu().numpy()
-
-        # print(x.shape, y.shape, rand_id)
-        return 2 * min(p_value_f, p_value_t)
-
-    def _get_metric_msk(self,
-                        inp,
-                        lab,
-                        criterion,
-                        program,
-                        global_vars,
-                        parm_do,
-                        reject_var,
-                        accept_var):
-
-        with torch.no_grad():
-            parm = parm_do.squeeze().detach().clone()
-            parm = torch.sigmoid(parm)
-            parm_id = torch.argsort(parm)
-            parm_id = parm_id.cpu().numpy().tolist()
-            exclude_id = None
-            for pid in parm_id:
-                if not (pid in reject_var or pid in accept_var):
-                    # print(pid)
-                    exclude_id = pid
-                    break
-
-            # parm = parm.detach().cpu().numpy()
-            # parm_id = random.choices(list(range(parm.shape[-1])),
-            #                          k=parm.shape[-1],
-            #                          weights=parm)
-            # print(parm_id)
-            # parm_soft = torch.softmax(parm_sig, dim=0).detach().clone()
-            # parm_id = torch.argsort(parm)
-
-            # print(parm, parm_id)
-            # parm_id = list(range(parm.shape[-1]))
-            # random.shuffle(parm_id)
-            # exclude_id = None
-            # for pid in parm_id:
-            #     if pid not in reject_var:
-            #         # print(pid)
-            #         exclude_id = pid
-            #         break
-
-            # if exclude_id is None:
-            #     return None, None
-
-            # msk = torch.ones(inp.shape[-1], requires_grad=False)
-            # if torch.cuda.is_available():
-            #     msk = msk.cuda()
-            # msk[exclude_id] = 0
-            # lab_pred = eval(program, global_vars)(inp * msk)[0]
-            # loss = criterion(lab_pred, lab)
-            # metric = loss.detach().clone()
-
-        return 0, exclude_id
-
-        # rand_id = random.randrange(
-        #     self.data_dict['env_num'])
-        # p_org = self._conf_test(metric_org)
-        # p_msk = self._conf_test(metric_msk)
-
-    def get_unknown_fns_definitions(self, unkSortMap, is_graph=False):
+    def get_unknown_fns_definitions(self, unkSortMap):
         # TODO: double-check. may need re-writing.
         unk_fns_interpreter_def_list = []
 
         for unk_fn_name, unk_fn in unkSortMap.items():
 
-            # ******** Process output activation ***************
             fn_input_sort = unk_fn.args[0]
             fn_output_sort = unk_fn.rtpe
             output_dim = fn_output_sort.shape[1].value
@@ -767,12 +642,3 @@ class Interpreter:
             else:
                 raise NotImplementedError()
         return unk_fns_interpreter_def_list
-
-    def _temp(self, parm_do, parm_non_do):
-        with torch.no_grad():
-            tmp = parm_do[0].detach().clone()
-            tmp[:] = 0
-            parm_do[0].copy_(tmp)
-            tmp1 = parm_non_do[0].detach().clone()
-            tmp1[:] = 1
-            parm_non_do[0].copy_(tmp)
