@@ -96,6 +96,7 @@ def get_task_settings(data_dict: Dict,
         synthesizer=synthesizer,
         dbg_learn_parameters=dbg_learn_parameters,
         learning_rate=0.02,
+        warm_up=8,
         data_dict=data_dict)
     return task_settings
 
@@ -280,6 +281,8 @@ def parse_args():
 
 if __name__ == '__main__':
     # python -m HOUDINI.Run.LGANM --repeat 1 --exp fin
+    # wass,          6000 data: abcd: 97.08, 97.15 fin: 99.54, 99.62
+    # np.sqrt(wass), 6000 data: abcd: 97.56, 98.10 fin: 99.67, 99.50 (prefer)
     args = parse_args()
 
     settings = {'results_dir': str(args.lganm_dir / 'Results'),
@@ -315,29 +318,42 @@ if __name__ == '__main__':
 
     pkl_dir = args.lganm_dir / args.exp / 'n_1000'
     print(pkl_dir, len(list(pkl_dir.glob('*.pickle'))))
+    # ['53', '54', '73', '75', '97', '98', '108', '185']
+    # ['53', '54', '73', '75', '96', '97', '98', '108', '185', '213', '249', '238', '286', '285', '236']
+    # ['232', '36', '53', '98', '238', '195', '286']
+    # fin ['994', '440', '218', '1481', '1803', '1585', '1586', '797']
+    # fin ['2353', '1430', '118', '1127', '443', '1693', '676', '770', '867', '202', '1418', '2139', '1408', '909', '327',
+    # '1636', '593', '1877', '938', '1638', '936', '847', '1808', '2336', '2152', '943', '568', '145', '1027']
     for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
-        if pkl_id > 400:
+        if pkl_id > 300:
             continue
-    # for pkl_id in ['218', '213', '387', '214', '53', '52', '219', '98', '385', '121',
-    #     '220', '185', '96', '384', '108', '97', '55', '386', '123', '54']:
-    #     # print('{} {} experiment id: {}'.format(exp, pkl_id, pkl_file.stem))
-    #     pkl_file = args.lganm_dir / exp / 'n_1000' / '{}.pickle'.format(pkl_id)
+    # fin: 0.7846
+    # fin: 0.9258 if coef = 9 * (sota_grad[sota_idx] <= 0.1)
+    # for pkl_id in ['1921', '980', '222', '1303', '107', '1391', '2377', '1588', '1481', '1918', '997', '1703', '1701', '387', '796', '1385', '519', '1804', '2081', '1702', '893', '1164', '1467', '2080', '2217', '1483', '694', '2381']:
+    # abcd: 0.6675, 0.6545
+    # abcd:(ada) 0.6840,
+    # ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']
+    # for pkl_id in ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']:
+    # ['185', '239', '53', '99', '96', '55', '97', '98', '52', '238', '236', '54', '237', '249']
+    # for pkl_id in ['99', ]:
+        pkl_file = args.lganm_dir / args.exp / \
+            'n_1000' / '{}.pickle'.format(pkl_id)
         with open(str(pkl_file), 'rb') as pl:
             lganm_dict = pickle.load(pl)
             lganm_parm = {'dict_name': 'lganm',
-                            'repeat': args.repeat,
-                            'mid_size': lganm_dict['envs'][0].shape[1],
-                            'out_type': 'integer',
-                            'env_num': len(lganm_dict['envs'])}
+                          'repeat': args.repeat,
+                          'mid_size': lganm_dict['envs'][0].shape[1],
+                          'out_type': 'integer',
+                          'env_num': len(lganm_dict['envs'])}
             lganm_dict.update(lganm_parm)
 
         for sequence_idx, sequence in enumerate(seq_info_dict['sequences']):
             for task_id in range(seq_info_dict['num_tasks']):
                 main(lganm_dict=lganm_dict,
-                        task_id=task_id,
-                        seq_str=sequence,
-                        seq_name=prefixes[sequence_idx],
-                        synthesizer=settings['synthesizer'])
+                     task_id=task_id,
+                     seq_str=sequence,
+                     seq_name=prefixes[sequence_idx],
+                     synthesizer=settings['synthesizer'])
                 mean_jacob.append(lganm_dict['jacob'])
                 mean_fwer.append(lganm_dict['fwer'])
                 if lganm_dict['jacob'] != 1:
@@ -347,8 +363,11 @@ if __name__ == '__main__':
                     if key not in ('error', 'id'):
                         res_dict[key].append(lganm_dict[key])
                 res_dict['id'].append(pkl_file.stem)
-                # print(res_dict['accept'], res_dict['truth'], res_dict['target'])
-
+                print(res_dict['accept'][-1],
+                      res_dict['truth'][-1], res_dict['target'][-1])
+        print('the jacarrd accuracy: ', sum(mean_jacob) / len(mean_jacob))
+        print('the jacarrd accuracy: ', sum(mean_jacob) / len(mean_jacob))
+        print('the jacarrd accuracy: ', sum(mean_jacob) / len(mean_jacob))
     pkl_nm = pathlib.Path(settings['results_dir']) / 'n_1000_res.pickle'
     with open(str(pkl_nm), 'wb') as pl:
         pickle.dump(res_dict, pl)

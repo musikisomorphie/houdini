@@ -6,6 +6,7 @@ import numpy as np
 from enum import Enum
 from functools import reduce
 from collections import OrderedDict
+from numpy.compat.py3k import is_pathlib_path
 from scipy import stats
 from typing import List, Dict, Optional, Tuple, Union, Iterator
 import torch
@@ -51,13 +52,8 @@ class Interpreter:
         self.val_size = settings.val_size
         self.tst_size = self.val_size
         self.batch_size = settings.batch_size
-        self.epochs = settings.epochs
         self.lr = settings.learning_rate
-
-        if self.data_dict['dict_name'] != 'portec':
-            self.var_num = self.data_dict['mid_size'] - 1
-        else:
-            self.var_num = self.data_dict['mid_size'] - 2
+        self.warm_up = settings.warm_up
 
     def _create_fns(self, unknown_fns: List[Dict]) -> Tuple[Dict, Dict]:
         """ Instantiate the higher-oder functions, 
@@ -178,6 +174,22 @@ class Interpreter:
                               only_inputs=True)[0]
         return grads.detach()
 
+    def _update_sota(self,
+                     sota_acc,
+                     sota_grad,
+                     sota_fns_dict,
+                     prog_fns_dict,
+                     val_mse,
+                     val_grad=None,
+                     parm_do=None):
+        sota_acc = -np.mean(val_mse)
+        sota_mse = val_mse
+        self._clone_weights_state(prog_fns_dict,
+                                  sota_fns_dict)
+        if val_grad is not None:
+            sota_grad = val_grad * parm_do.cpu().numpy()
+        return sota_acc, sota_mse, sota_grad, sota_fns_dict
+
     def _predict_data(self,
                       data_loader: NumpyDataSetIterator,
                       program: str,
@@ -230,6 +242,20 @@ class Interpreter:
 
                 y_pred = eval(program, prog_fns_dict)(x.float())
                 yield (y_pred, y.float(), x.float())
+
+    def _train_data(self,
+                    data_loader: NumpyDataSetIterator,
+                    program: str,
+                    prog_fns_dict: Dict,
+                    criterion,
+                    optim):
+        for y_pred, y, x_in in self._predict_data(data_loader, program, prog_fns_dict):
+            if type(y_pred) == tuple:
+                y_pred = y_pred[0]
+            loss = criterion(y_pred, y)
+            optim.zero_grad()
+            (loss.mean()).backward(retain_graph=True)
+            optim.step()
 
     def _get_accuracy(self,
                       output_type: ProgramOutputType,
@@ -331,52 +357,19 @@ class Interpreter:
         return mse_out, grad_out, score_out
 
     def learn_neural_network(self,
-                             program,
-                             output_type,
-                             unknown_fns,
+                             program: str,
+                             output_type: ProgramOutputType,
+                             unknown_fns: List[Dict],
                              data_loader_trn: NumpyDataSetIterator,
                              data_loader_val: NumpyDataSetIterator,
-                             data_loader_tst: NumpyDataSetIterator):
+                             data_loader_tst: NumpyDataSetIterator) -> Dict:
 
         if output_type == ProgramOutputType.INTEGER:
-            criterion = torch.nn.MSELoss(reduction='none')
-        elif output_type == ProgramOutputType.SIGMOID:
-            criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
+            criterion = nn.MSELoss(reduction='none')
         elif output_type == ProgramOutputType.HAZARD:
             criterion = Loss.cox_ph_loss
         else:
-            # combines log_softmax and cross-entropy
-            criterion = F.cross_entropy
-
-        # data_loader_trn is either a dataloader or a list of dataloaders
-        if issubclass(type(data_loader_trn), NumpyDataSetIterator):
-            num_datapoints_tr = data_loader_trn.num_datapoints
-        else:
-            num_datapoints_tr = reduce(
-                lambda a, b: a + b.num_datapoints, data_loader_trn, 0.)
-
-        num_iterations_in_1_epoch = num_datapoints_tr // self.batch_size + \
-            (0 if num_datapoints_tr % self.batch_size == 0 else 1)
-        num_iterations = num_iterations_in_1_epoch * self.epochs
-        evaluate_every_n_iters = int(num_iterations_in_1_epoch / self.var_num)
-        evaluate_every_n_iters = 1 if evaluate_every_n_iters == 0 else evaluate_every_n_iters
-        eval_num = math.ceil(num_iterations_in_1_epoch /
-                             evaluate_every_n_iters)
-        # print("evaluate_every_n_iters=", evaluate_every_n_iters)
-
-        # ***************** Train *****************
-        max_accuracy = -sys.float_info.max
-        # a dictionary of state_dicts for each new neural module
-        max_accuracy_new_fns_states = dict()
-        sota_fns_dict = dict()
-        sota_acc = -sys.float_info.max
-        sota_var = 0
-        sota_grad = None
-        sota_idx = None
-        sota_mse = None
-        accuracies_val = list()
-        accuracies_test = list()
-        iterations = list()
+            raise TypeError('Unknown output type {}'.format(output_type))
 
         prog_fns_dict, trainable_parameters = self._create_fns(unknown_fns)
         parm_all = trainable_parameters['do'] + trainable_parameters['non-do']
@@ -385,153 +378,99 @@ class Interpreter:
                                      lr=self.lr,
                                      weight_decay=0.001)
 
-        current_iteration = 0
-        reject_var = set()
-        accept_var = set()
-        epoch = 0
-        has_trained_more = False
-        is_lganm = self.data_dict['dict_name'].lower() == 'lganm'
-        while len(accept_var) + len(reject_var) < 11:
-            print("Starting epoch ", epoch)
-            iter_in_one_epoch = 0
-            prob_all, metric_all = 0, list()
+        ###################################################################
+        ########################Warm-Up Training###########################
+        ###################################################################
+        sota_fns_dict = dict()
+        sota_acc = -sys.float_info.max
+        sota_grad = None
+        sota_mse = None
+        for epoch in range(self.warm_up):
+            print('Starting warm-up epoch {}'.format(epoch))
             self._set_weights_mode(prog_fns_dict, is_trn=True)
-            for y_pred, y, x_in in self._predict_data(data_loader_trn, program, prog_fns_dict):
-                # for i in range(12):
-                #     dt_num = y.shape[0] // 12
-                #     if not np.all(y[i * dt_num: (i + 1) * dt_num, -1].detach().cpu().numpy() == i):
-                #         print('false env')
-                #         print(y[i * dt_num: (i + 1) * dt_num])
-                if type(y_pred) == tuple:
-                    y_pred = y_pred[0]
-
-                # wei = torch.ones(11 * 64, requires_grad=False).cuda()
-                # wei[10:64 :11*64] = 0.1
-
-                # loss = wei * criterion(y_pred, y)
-                loss = criterion(y_pred, y)
-                optim_all.zero_grad()
-                (loss.mean()).backward(retain_graph=True)
-                optim_all.step()
-
-                # if iter_in_one_epoch % evaluate_every_n_iters == 0:
-                # if parm_do and iter_in_one_epoch == num_iterations_in_1_epoch - 1:
-                # print(prob_all)
-
-                iter_in_one_epoch += 1
-                current_iteration += 1
+            self._train_data(data_loader_trn,
+                             program,
+                             prog_fns_dict,
+                             criterion,
+                             optim_all)
 
             self._set_weights_mode(prog_fns_dict, is_trn=False)
+            val_mse, val_grad = self._get_accuracy(output_type,
+                                                   data_loader_val,
+                                                   program,
+                                                   prog_fns_dict,
+                                                   compute_grad=True)[:2]
+            if sota_acc < -np.mean(val_mse):
+                sota_tuple = self._update_sota(sota_acc,
+                                               sota_grad,
+                                               sota_fns_dict,
+                                               prog_fns_dict,
+                                               val_mse,
+                                               val_grad,
+                                               parm_do[0][0].detach())
+                sota_acc, sota_mse, sota_grad, sota_fns_dict = sota_tuple
 
-            if epoch <= 7:
-                val_mse, val_grad = self._get_accuracy(output_type,
-                                                       data_loader_val,
-                                                       program,
-                                                       prog_fns_dict,
-                                                       compute_grad=is_lganm)[:2]
-                # sota_grad *= parm_do[0][0].detach().cpu().numpy()
-                # prob_idx = np.argsort(sota_grad).tolist()
-                #sota_mse = val_mse
-                #sota_acc = -np.mean(sota_mse)
-                # for new_fn_name, new_fn in new_fns_dict.items():
-                #    sota_fns_dict[new_fn_name] = self._clone_hidden_state(new_fn.state_dict())
-                #print(sota_grad, prob_idx)
+        ###################################################################
+        ########################Causal Training############################
+        ###################################################################
+        reject_var, accept_var = set(), set()
+        sota_idx = None
+        is_penalize_var = True
+        while len(accept_var) + len(reject_var) < 11:
+            print('Starting causl training epoch.')
+            # obtain the variable index
+            if is_penalize_var:
+                with torch.no_grad():
+                    for idx in np.argsort(sota_grad).tolist():
+                        if not ((idx in accept_var) or (idx in reject_var)):
+                            sota_idx = idx
+                            prob = parm_do[0].detach().clone()
+                            prob[0, sota_idx] -= 10
+                            parm_do[0].copy_(prob)
+                            break
 
-            else:
-                val_mse = self._get_accuracy(output_type,
-                                             data_loader_val,
-                                             program,
-                                             prog_fns_dict)[0]
+            self._set_weights_mode(prog_fns_dict, is_trn=True)
+            self._train_data(data_loader_trn,
+                             program,
+                             prog_fns_dict,
+                             criterion,
+                             optim_all)
 
-            tst_mse = self._get_accuracy(output_type,
-                                         data_loader_tst,
+            self._set_weights_mode(prog_fns_dict, is_trn=False)
+            val_mse = self._get_accuracy(output_type,
+                                         data_loader_val,
                                          program,
                                          prog_fns_dict)[0]
 
-            val_acc = -np.mean(val_mse)
-            val_var = np.var(val_mse)
-            tst_acc = -np.mean(tst_mse)
-            tst_var = np.var(tst_mse)
+            if sota_acc < -np.mean(val_mse):
+                sota_tuple = self._update_sota(sota_acc,
+                                               sota_grad,
+                                               sota_fns_dict,
+                                               prog_fns_dict,
+                                               val_mse)
+                sota_acc, sota_mse, sota_grad, sota_fns_dict = sota_tuple
 
-            if sota_acc < val_acc:
-                sota_acc = val_acc
-                sota_var = val_var
-                sota_mse = val_mse
+            wass_dis, cur_mean = self._wass(val_mse, sota_mse)
+            coef = 9 * (sota_grad[sota_idx] < 0.08)
+            if wass_dis > -coef * sota_acc:
+                if is_penalize_var:
+                    is_penalize_var = False
+                    continue
+                accept_var.add(sota_idx)
+                for new_fn_name, new_fn in prog_fns_dict.items():
+                    if issubclass(type(new_fn), nn.Module):
+                        new_fn.load_state_dict(
+                            sota_fns_dict[new_fn_name])
+            else:
+                reject_var.add(sota_idx)
                 self._clone_weights_state(prog_fns_dict,
                                           sota_fns_dict)
-                if epoch <= 7:
-                    sota_grad = val_grad * parm_do[0][0].detach().cpu().numpy()
-                    prob_idx = np.argsort(sota_grad).tolist()
+            is_penalize_var = True
+            print(sota_idx, sota_acc, wass_dis,
+                  accept_var, reject_var)
+            print(cur_mean, sota_grad)
 
-            if parm_do and epoch > 7:
-                wass_dis, cur_mean = self._wass(val_mse, sota_mse)
-                coef = 9 * (sota_grad[sota_idx] < 0.08)
-                if wass_dis > -coef * sota_acc:
-                    if not has_trained_more:
-                        has_trained_more = True
-                        continue
-                    else:
-                        has_trained_more = False
-                        accept_var.add(sota_idx)
-                        for new_fn_name, new_fn in prog_fns_dict.items():
-                            if issubclass(type(new_fn), nn.Module):
-                                new_fn.load_state_dict(
-                                    sota_fns_dict[new_fn_name])
-                else:
-                    if has_trained_more:
-                        has_trained_more = False
-                    reject_var.add(sota_idx)
-                    self._clone_weights_state(prog_fns_dict,
-                                              sota_fns_dict)
-
-                print(sota_idx, sota_acc, wass_dis,
-                      accept_var, reject_var)
-                print(cur_mean, sota_grad)
-
-            if parm_do and epoch >= 7:
-                with torch.no_grad():
-                    for idx in prob_idx:
-                        if not ((idx in accept_var) or (idx in reject_var)):
-                            sota_idx = idx
-                            # sota_grad = val_grad[idx]
-                            tmp = parm_do[0].detach().clone()
-                            tmp[0, idx] -= 10
-                            parm_do[0].copy_(tmp)
-                            break
-
-            # set all new functions to train mode
-            # for _, value in prog_fns_dict.items():
-            #     value.train()
-
-            accuracies_val.append(val_acc)
-            accuracies_test.append(tst_acc)
-            iterations.append(current_iteration)
-
-            # if max_accuracy < val_acc:
-            #     max_accuracy = val_acc
-            #     # store the state_dictionary of the best performing model
-            #     for new_fn_name, new_fn in prog_fns_dict.items():
-            #         max_accuracy_new_fns_states[new_fn_name] = self._clone_hidden_state(
-            #             new_fn.state_dict())
-
-            epoch += 1
-        print('sota_accuracy_found_during_training:', sota_acc)
-        # TODO: need to finetune here
-        # TODO: need to finetune here
-        # TODO: need to finetune here
-        # set the state_dictionaries of the new functions to the model with best validation accuracy
-        # for new_fn_name, new_fn in new_fns_dict.items():
-        #     new_fn.load_state_dict(max_accuracy_new_fns_states[new_fn_name])
-
-        # set all new functions to eval mode
-        # for key, value in prog_fns_dict.items():
-        #     value.eval()
-
-        num_evaluations = accuracies_val.__len__()
-        evaluations_np = np.ones((num_evaluations, 3), dtype=np.float32)
-        evaluations_np[:, 0] = iterations
-        evaluations_np[:, 1] = accuracies_val
-        evaluations_np[:, 2] = accuracies_test
+        print('sota accuracy found during training:', sota_acc)
 
         var_list = list(range(12))
         var_list.remove(self.data_dict['target'])
@@ -546,7 +485,7 @@ class Interpreter:
         self.data_dict['likelihood'] = torch.sigmoid(
             parm_do[0][0]).detach().cpu().numpy()
         self.data_dict['grads'] = sota_grad
-        return prog_fns_dict, 0., evaluations_np
+        return prog_fns_dict
 
     def evaluate_(self,
                   program: str,
@@ -589,12 +528,12 @@ class Interpreter:
                 if not dbg_learn_parameters:
                     prog_fns_dict, _ = self._create_fns(unknown_fns_def)
                 else:
-                    prog_fns_dict, val_acc, evaluations_np = self.learn_neural_network(program,
-                                                                                       output_type,
-                                                                                       unknown_fns_def,
-                                                                                       data_loader_trn,
-                                                                                       data_loader_val,
-                                                                                       data_loader_tst)
+                    prog_fns_dict = self.learn_neural_network(program,
+                                                              output_type,
+                                                              unknown_fns_def,
+                                                              data_loader_trn,
+                                                              data_loader_val,
+                                                              data_loader_tst)
             # val_acc = self._get_accuracy(program,
             #                              data_loader_val,
             #                              output_type,
