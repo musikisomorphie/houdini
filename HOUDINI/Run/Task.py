@@ -152,17 +152,17 @@ class TaskResult:
 _TaskSettings = NamedTuple('TaskSettings', [
     ('train_size', int),  # Training data size
     ('val_size', int),  # Validation data size = Test data size
-    # Train on different training data sizes.
     ('training_percentages', List[int]),
     ('N', int),  # Max number of solutions to generate
     ('M', int),  # Max number of solutions evaluated by the interpreter
     ('K', int),  # Number of top solutions to store.
-    ('epochs', int),
     ('synthesizer', str),  # 'enumerative'| 'evolutionary',
-    ('batch_size', int),
     ('dbg_learn_parameters', bool),  # If False, it won't learn new parameters
     ('learning_rate', float),
-    ('warm_up', int), # warm-up epoches
+    ('warm_up', int),  # warm-up epoches
+    ('var_num', int),
+    ('lambda_1', float),  
+    ('lambda_2', float),
     ('data_dict', dict),
 ])
 
@@ -171,8 +171,8 @@ class TaskSettings(_TaskSettings):
     """
     A named tuple with default parameters
     """
-    def __new__(cls, batch_size=150, dbg_learn_parameters=True, **kwargs):
-        return super(TaskSettings, cls).__new__(cls, batch_size=batch_size, dbg_learn_parameters=dbg_learn_parameters,
+    def __new__(cls, dbg_learn_parameters=True, **kwargs):
+        return super(TaskSettings, cls).__new__(cls, dbg_learn_parameters=dbg_learn_parameters,
                                                 **kwargs)
 
 
@@ -244,19 +244,19 @@ class Task:
 
         train_io, val_io, test_io = self.get_io_examples()
 
-        max_iterations = \
-            (self.settings.train_size // nsynth.interpreter.batch_size + (
-                1 if self.settings.train_size % nsynth.interpreter.batch_size != 0 else 0)) * self.settings.epochs
+        # max_iterations = \
+        #     (self.settings.train_size // nsynth.interpreter.batch_size + (
+        #         1 if self.settings.train_size % nsynth.interpreter.batch_size != 0 else 0)) * self.settings.epochs
 
         res = TaskResult()
         for i, (c_tr_io_examples, c_tr_num_items) in enumerate(iterate_diff_training_sizes(train_io,
                                                                                            self.settings.training_percentages)):
 
-            interpreter = nsynth.interpreter
-            c_iterations_per_epoch = c_tr_num_items // interpreter.batch_size + \
-                (1 if c_tr_num_items % interpreter.batch_size != 0 else 0)
-            c_num_epochs = max_iterations // c_iterations_per_epoch + \
-                (1 if max_iterations % c_iterations_per_epoch != 0 else 0)
+            # interpreter = nsynth.interpreter
+            # c_iterations_per_epoch = c_tr_num_items // interpreter.batch_size + \
+            #     (1 if c_tr_num_items % interpreter.batch_size != 0 else 0)
+            # c_num_epochs = max_iterations // c_iterations_per_epoch + \
+            #     (1 if max_iterations % c_iterations_per_epoch != 0 else 0)
             # interpreter.epochs = c_num_epochs
 
             rStart = time.time()

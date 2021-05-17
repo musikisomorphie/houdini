@@ -87,16 +87,17 @@ def get_task_settings(data_dict: Dict,
     task_settings = TaskSettings(
         train_size=64,
         val_size=64,
-        batch_size=64,
         training_percentages=[100],
         N=5000,
         M=1,
         K=1,
-        epochs=13,
         synthesizer=synthesizer,
         dbg_learn_parameters=dbg_learn_parameters,
         learning_rate=0.02,
         warm_up=8,
+        var_num=data_dict['envs'][0].shape[1] - 1,
+        lambda_1=9,
+        lambda_2=0.08,
         data_dict=data_dict)
     return task_settings
 
@@ -333,9 +334,9 @@ if __name__ == '__main__':
     # abcd: 0.6675, 0.6545
     # abcd:(ada) 0.6840,
     # ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']
-    # for pkl_id in ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']:
-    # ['185', '239', '53', '99', '96', '55', '97', '98', '52', '238', '236', '54', '237', '249']
-    # for pkl_id in ['99', ]:
+    for pkl_id in ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']:
+        # ['185', '239', '53', '99', '96', '55', '97', '98', '52', '238', '236', '54', '237', '249']
+        # for pkl_id in ['99', ]:
         pkl_file = args.lganm_dir / args.exp / \
             'n_1000' / '{}.pickle'.format(pkl_id)
         with open(str(pkl_file), 'rb') as pl:

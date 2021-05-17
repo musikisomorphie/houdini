@@ -48,12 +48,18 @@ class Interpreter:
 
         self.library = library
         self.data_dict = settings.data_dict
-        self.trn_size = settings.train_size
-        self.val_size = settings.val_size
-        self.tst_size = self.val_size
-        self.batch_size = settings.batch_size
-        self.lr = settings.learning_rate
-        self.warm_up = settings.warm_up
+        self.settings = settings
+        # deprecated batch_size, but is required
+        # self.batch_size = settings.batch_size
+
+        # self.settings.train_size = settings.train_size
+        # self.settings.val_size = settings.val_size
+        # self.tst_size = self.settings.val_size
+        # self.settings.learning_rate = settings.learning_rate
+        # self.warm_up = settings.warm_up
+        # self.var_num = settings.var_num
+        # self.lambda_1 = settings.lambda_1
+        # self.lambda_2 = settings.lambda_2
 
         if self.data_dict['out_type'] == 'hazard':
             self.output_type = ProgramOutputType.HAZARD
@@ -398,7 +404,7 @@ class Interpreter:
         parm_all = trainable_parameters['do'] + trainable_parameters['non-do']
         parm_do = trainable_parameters['do']
         optim_all = torch.optim.Adam(parm_all,
-                                     lr=self.lr,
+                                     lr=self.settings.learning_rate,
                                      weight_decay=0.001)
 
         ###################################################################
@@ -408,7 +414,7 @@ class Interpreter:
         sota_mse = None
         sota_grad = None
         sota_fns_dict = dict()
-        for epoch in range(self.warm_up):
+        for epoch in range(self.settings.warm_up):
             print('Starting warm-up epoch {}'.format(epoch))
             self._set_weights_mode(prog_fns_dict, is_trn=True)
             self._train_data(data_loader_trn,
@@ -437,7 +443,7 @@ class Interpreter:
         reject_var, accept_var = set(), set()
         sota_idx = None
         is_penalize_var = True
-        while len(accept_var) + len(reject_var) < 11:
+        while len(accept_var) + len(reject_var) < self.settings.var_num:
             print('Starting causl training epoch.')
             # obtain the variable index
             if is_penalize_var:
@@ -470,7 +476,7 @@ class Interpreter:
                 sota_acc, sota_mse, sota_grad, sota_fns_dict = sota_tuple
 
             wass_dis, cur_mean = self._wass(val_mse, sota_mse)
-            coef = 9 * (sota_grad[sota_idx] < 0.08)
+            coef = self.settings.lambda_1 * (sota_grad[sota_idx] < self.settings.lambda_2)
             if wass_dis > -coef * sota_acc:
                 if is_penalize_var:
                     is_penalize_var = False
@@ -526,11 +532,11 @@ class Interpreter:
         :return:
         """
         data_loader_trn = self._get_data_loader(io_examples_trn,
-                                                self.trn_size)
+                                                self.settings.train_size)
         data_loader_val = self._get_data_loader(io_examples_val,
-                                                self.val_size)
+                                                self.settings.val_size)
         data_loader_tst = self._get_data_loader(io_examples_tst,
-                                                self.tst_size)
+                                                self.settings.val_size)
 
         prog_fns_dict = {}
         val_accuracy, test_accuracy = list(), list()
