@@ -426,6 +426,11 @@ class Interpreter:
                                                parm_do[0][0].detach())
                 sota_acc, sota_mse, sota_grad, sota_fns_dict = sota_tuple
 
+        for new_fn_name, new_fn in prog_fns_dict.items():
+            if issubclass(type(new_fn), nn.Module):
+                new_fn.load_state_dict(
+                    sota_fns_dict[new_fn_name])
+
         ###################################################################
         ########################Causal Training############################
         ###################################################################
