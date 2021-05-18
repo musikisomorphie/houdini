@@ -90,8 +90,8 @@ def get_task_settings(data_dict: Dict,
         lambda_1 = 9
         lambda_2 = 0.08
     elif len(confounder) == 1:
-        lambda_1 = 8
-        lambda_2 = 0.08
+        lambda_1 = 18
+        lambda_2 = 0.09
     elif len(confounder) == 2:
         lambda_1 = 9
         lambda_2 = 0.16
@@ -348,7 +348,6 @@ if __name__ == '__main__':
     wrong_list = list()
 
     pkl_dir = args.lganm_dir / args.exp / 'n_1000'
-    print(pkl_dir, len(list(pkl_dir.glob('*.pickle'))))
     for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
         if pkl_id > 600:
             continue
@@ -360,12 +359,12 @@ if __name__ == '__main__':
             if len(lganm_dict['truth']) - args.confounder == 0:
                 print('This experiment does not have parents, thus ignore.')
                 continue
-            lganm_dict['truth'] = sorted(lganm_dict['truth'])
-            print('all the parents: {}, outcome: {}'.format(
+            lganm_dict['truth'] = list(lganm_dict['truth'])
+            print('\n\n all the parents: {}, outcome: {}'.format(
                 lganm_dict['truth'], lganm_dict['target']))
             lganm_dict['confounder'] = lganm_dict['truth'][:args.confounder]
             lganm_dict['truth'] = lganm_dict['truth'][args.confounder:]
-            print('remaining parents: {}, confounder: {}'.format(
+            print('remaining parents: {}, confounder: {} \n\n'.format(
                 lganm_dict['truth'], lganm_dict['confounder']))
             lganm_parm = {'dict_name': 'lganm',
                           'repeat': args.repeat,
@@ -395,7 +394,7 @@ if __name__ == '__main__':
                       res_dict['truth'][-1], res_dict['target'][-1])
         print('the jacarrd accuracy: ', sum(mean_jacob) / len(mean_jacob))
         print('the jacarrd accuracy: ', sum(mean_jacob) / len(mean_jacob))
-        print('the jacarrd accuracy: ', sum(mean_jacob) / len(mean_jacob))
+        print('the fwer accuracy: ', sum(mean_fwer) / len(mean_fwer))
     pkl_nm = pathlib.Path(settings['results_dir']) / 'n_1000_res.pickle'
     with open(str(pkl_nm), 'wb') as pl:
         pickle.dump(res_dict, pl)

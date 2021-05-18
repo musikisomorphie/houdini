@@ -487,6 +487,7 @@ class Interpreter:
             print(cur_mean, sota_grad)
 
         var_list = list(range(self.data_dict['mid_size']))
+        num_cfd = len(self.data_dict['confounder'])
         # print(self.data_dict['confounder'])
         var_remove = [self.data_dict['target']] + self.data_dict['confounder']
         for var in sorted(var_remove, reverse=True):
@@ -496,8 +497,8 @@ class Interpreter:
         self.data_dict['accept'] = var_np[list(accept_var)]
         par_set = set(self.data_dict['truth'])
         cnd_set = set(self.data_dict['accept'].tolist())
-        self.data_dict['jacob'] = len(par_set.intersection(cnd_set)) / \
-            len(par_set.union(cnd_set))
+        self.data_dict['jacob'] = (len(par_set.intersection(cnd_set)) + num_cfd) / \
+            (len(par_set.union(cnd_set)) + num_cfd)
         self.data_dict['fwer'] = not cnd_set.issubset(par_set)
         self.data_dict['likelihood'] = torch.sigmoid(
             parm_do[0][0]).detach().cpu().numpy()

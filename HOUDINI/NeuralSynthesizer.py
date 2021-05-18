@@ -115,9 +115,9 @@ class NeuralSynthesizer:
                 self.evaluated_programs_type_info.append(str(prog))
                 self.prog_unkinfo_tuples.append((prog, unkSortMap))
                 m += 1
-            else:
-                if ecode != 2:
-                    self.log_rejected_program(prog, ecode)
+            # else:
+            #     if ecode != 2:
+            #         self.log_rejected_program(prog, ecode)
 
         print('END_PROGRAM_GENERATION, Time: %s' % getElapsedTime())
         pEnd = time.time()
