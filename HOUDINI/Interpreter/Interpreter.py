@@ -49,17 +49,6 @@ class Interpreter:
         self.library = library
         self.data_dict = settings.data_dict
         self.settings = settings
-        # deprecated batch_size, but is required
-        # self.batch_size = settings.batch_size
-
-        # self.settings.train_size = settings.train_size
-        # self.settings.val_size = settings.val_size
-        # self.tst_size = self.settings.val_size
-        # self.settings.learning_rate = settings.learning_rate
-        # self.warm_up = settings.warm_up
-        # self.var_num = settings.var_num
-        # self.lambda_1 = settings.lambda_1
-        # self.lambda_2 = settings.lambda_2
 
         if self.data_dict['out_type'] == 'hazard':
             self.output_type = ProgramOutputType.HAZARD
@@ -452,7 +441,7 @@ class Interpreter:
                         if not ((idx in accept_var) or (idx in reject_var)):
                             sota_idx = idx
                             prob = parm_do[0].detach().clone()
-                            prob[0, sota_idx] -= 10
+                            prob[0, sota_idx] -= self.settings.lambda_cau
                             parm_do[0].copy_(prob)
                             break
 
@@ -476,7 +465,8 @@ class Interpreter:
                 sota_acc, sota_mse, sota_grad, sota_fns_dict = sota_tuple
 
             wass_dis, cur_mean = self._wass(val_mse, sota_mse)
-            coef = self.settings.lambda_1 * (sota_grad[sota_idx] < self.settings.lambda_2)
+            coef = self.settings.lambda_1 * \
+                (sota_grad[sota_idx] < self.settings.lambda_2)
             if wass_dis > -coef * sota_acc:
                 if is_penalize_var:
                     is_penalize_var = False
@@ -496,10 +486,11 @@ class Interpreter:
                   accept_var, reject_var)
             print(cur_mean, sota_grad)
 
-        print('sota accuracy found during training:', sota_acc)
-
-        var_list = list(range(12))
-        var_list.remove(self.data_dict['target'])
+        var_list = list(range(self.data_dict['mid_size']))
+        # print(self.data_dict['confounder'])
+        var_remove = [self.data_dict['target']] + self.data_dict['confounder']
+        for var in sorted(var_remove, reverse=True):
+            var_list.remove(var)
         var_np = np.array(var_list)
         self.data_dict['reject'] = var_np[list(reject_var)]
         self.data_dict['accept'] = var_np[list(accept_var)]

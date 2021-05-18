@@ -72,7 +72,8 @@ def get_seq_from_string(seq_str: str) -> List[SeqTaskInfo]:
 
 def get_task_settings(data_dict: Dict,
                       dbg_learn_parameters: bool,
-                      synthesizer: str) -> TaskSettings:
+                      synthesizer: str,
+                      confounder: List[int]) -> TaskSettings:
     """Get the TaskSettings namedtuple, which
     stores important learning parmeters
 
@@ -84,6 +85,20 @@ def get_task_settings(data_dict: Dict,
     Returns:
         the Tasksettings namedtuple 
     """
+
+    if len(confounder) == 0:
+        lambda_1 = 9
+        lambda_2 = 0.08
+    elif len(confounder) == 1:
+        lambda_1 = 8
+        lambda_2 = 0.08
+    elif len(confounder) == 2:
+        lambda_1 = 9
+        lambda_2 = 0.16
+    else:
+        raise NotImplementedError('the coeff is not implemented '
+                                  'for {} confounder(s)'.format(len(confounder)))
+
     task_settings = TaskSettings(
         train_size=64,
         val_size=64,
@@ -94,10 +109,11 @@ def get_task_settings(data_dict: Dict,
         synthesizer=synthesizer,
         dbg_learn_parameters=dbg_learn_parameters,
         learning_rate=0.02,
+        var_num=data_dict['envs'][0].shape[1] - 1 - len(confounder),
         warm_up=8,
-        var_num=data_dict['envs'][0].shape[1] - 1,
-        lambda_1=9,
-        lambda_2=0.08,
+        lambda_1=lambda_1,
+        lambda_2=lambda_2,
+        lambda_cau=10.,
         data_dict=data_dict)
     return task_settings
 
@@ -133,7 +149,8 @@ class IdentifyTask(Task):
                  lganm_dict: Dict,
                  settings: TaskSettings,
                  seq: TaskSeq,
-                 dbg_learn_parameters: bool):
+                 dbg_learn_parameters: bool,
+                 confounder: List[int]):
         """The class of the causal(parent) variable
         identification task
 
@@ -144,13 +161,16 @@ class IdentifyTask(Task):
             seq: the task squence class
             dbg_learn_parameters: True if learn weights 
                 False otherwise
+            confounder: the list of confounders
         """
 
-        self.parents = lganm_dict['truth']
+        # self.parent = lganm_dict['truth']
+        self.confounder = confounder
         self.outcome = lganm_dict['target']
         self.envs = lganm_dict['envs']
         self.dt_dim = self.envs[0].shape[1]
-        input_type = mkListSort(mkRealTensorSort([1, self.dt_dim - 1]))
+        input_type = mkListSort(mkRealTensorSort(
+            [1, self.dt_dim - 1 - len(confounder)]))
         output_type = mkRealTensorSort([1, 1])
         fn_sort = mkFuncSort(input_type, output_type)
 
@@ -161,7 +181,7 @@ class IdentifyTask(Task):
 
     def get_io_examples(self):
         return get_lganm_io_examples(self.envs,
-                                     self.parents,
+                                     self.confounder,
                                      self.outcome,
                                      self.dt_dim)
 
@@ -180,7 +200,8 @@ class InferSequence(TaskSeq):
                  dbg_learn_parameters: bool,
                  seq_settings: TaskSeqSettings,
                  task_settings: TaskSettings,
-                 lib: OpLibrary):
+                 lib: OpLibrary,
+                 confounder: List[int]):
         """The class of the sequence task
 
         Args:
@@ -194,6 +215,7 @@ class InferSequence(TaskSeq):
             task_settings: the task settings storing important 
                 learning parameters
             lib: the library of higher order functions (Op)
+            confounder: the list of confounders
         """
 
         self._name = name
@@ -203,7 +225,8 @@ class InferSequence(TaskSeq):
                 tasks.append(IdentifyTask(lganm_dict,
                                           task_settings,
                                           self,
-                                          dbg_learn_parameters))
+                                          dbg_learn_parameters,
+                                          confounder))
 
         super().__init__(tasks,
                          seq_settings,
@@ -220,7 +243,8 @@ def main(lganm_dict: Dict,
          task_id: int,
          seq_str: str,
          seq_name: str,
-         synthesizer: str):
+         synthesizer: str,
+         confounder: List[int]):
     """The main function that runs the lganm experiments
 
     Args:
@@ -230,6 +254,7 @@ def main(lganm_dict: Dict,
         seq_str: the prefix name that retrieves the seq info dict
         seq_name: name of the sequence
         synthesizer: enumerative or evolutionary
+        confounder: the list of confounders
     """
 
     seq_settings = TaskSeqSettings(update_library=True,
@@ -237,7 +262,8 @@ def main(lganm_dict: Dict,
 
     task_settings = get_task_settings(lganm_dict,
                                       settings['dbg_learn_parameters'],
-                                      synthesizer=synthesizer)
+                                      synthesizer,
+                                      confounder)
 
     lib = OpLibrary(['do', 'compose', 'map',
                      'repeat', 'cat'])
@@ -251,7 +277,8 @@ def main(lganm_dict: Dict,
                         settings['dbg_learn_parameters'],
                         seq_settings,
                         task_settings,
-                        lib)
+                        lib,
+                        confounder)
     seq.run(task_id)
 
 
@@ -271,6 +298,11 @@ def parse_args():
                         choices=['fin', 'abcd'],
                         default='fin',
                         help='Experimental settings defined in AICP. (default: %(default)s)')
+    parser.add_argument('--confounder',
+                        type=int,
+                        choices=[0, 1, 2],
+                        default=0,
+                        help='The number of hidden confounders. (default: %(default)s)')
     parser.add_argument('--repeat',
                         type=int,
                         default=1,
@@ -282,8 +314,6 @@ def parse_args():
 
 if __name__ == '__main__':
     # python -m HOUDINI.Run.LGANM --repeat 1 --exp fin
-    # wass,          6000 data: abcd: 97.08, 97.15 fin: 99.54, 99.62
-    # np.sqrt(wass), 6000 data: abcd: 97.56, 98.10 fin: 99.67, 99.50 (prefer)
     args = parse_args()
 
     settings = {'results_dir': str(args.lganm_dir / 'Results'),
@@ -319,28 +349,24 @@ if __name__ == '__main__':
 
     pkl_dir = args.lganm_dir / args.exp / 'n_1000'
     print(pkl_dir, len(list(pkl_dir.glob('*.pickle'))))
-    # ['53', '54', '73', '75', '97', '98', '108', '185']
-    # ['53', '54', '73', '75', '96', '97', '98', '108', '185', '213', '249', '238', '286', '285', '236']
-    # ['232', '36', '53', '98', '238', '195', '286']
-    # fin ['994', '440', '218', '1481', '1803', '1585', '1586', '797']
-    # fin ['2353', '1430', '118', '1127', '443', '1693', '676', '770', '867', '202', '1418', '2139', '1408', '909', '327',
-    # '1636', '593', '1877', '938', '1638', '936', '847', '1808', '2336', '2152', '943', '568', '145', '1027']
     for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
-        if pkl_id > 400:
+        if pkl_id > 600:
             continue
-    # fin: 0.7846
-    # fin: 0.9258 if coef = 9 * (sota_grad[sota_idx] <= 0.1)
-    # for pkl_id in ['1921', '980', '222', '1303', '107', '1391', '2377', '1588', '1481', '1918', '997', '1703', '1701', '387', '796', '1385', '519', '1804', '2081', '1702', '893', '1164', '1467', '2080', '2217', '1483', '694', '2381']:
-    # abcd: 0.6675, 0.6545
-    # abcd:(ada) 0.6840,
-    # ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']
-    for pkl_id in ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']:
-        # ['185', '239', '53', '99', '96', '55', '97', '98', '52', '238', '236', '54', '237', '249']
-        # for pkl_id in ['99', ]:
-        pkl_file = args.lganm_dir / args.exp / \
-            'n_1000' / '{}.pickle'.format(pkl_id)
+    # for pkl_id in ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']:
+        # pkl_file = args.lganm_dir / args.exp / \
+            # 'n_1000' / '{}.pickle'.format(pkl_id)
         with open(str(pkl_file), 'rb') as pl:
             lganm_dict = pickle.load(pl)
+            if len(lganm_dict['truth']) - args.confounder == 0:
+                print('This experiment does not have parents, thus ignore.')
+                continue
+            lganm_dict['truth'] = sorted(lganm_dict['truth'])
+            print('all the parents: {}, outcome: {}'.format(
+                lganm_dict['truth'], lganm_dict['target']))
+            lganm_dict['confounder'] = lganm_dict['truth'][:args.confounder]
+            lganm_dict['truth'] = lganm_dict['truth'][args.confounder:]
+            print('remaining parents: {}, confounder: {}'.format(
+                lganm_dict['truth'], lganm_dict['confounder']))
             lganm_parm = {'dict_name': 'lganm',
                           'repeat': args.repeat,
                           'mid_size': lganm_dict['envs'][0].shape[1],
@@ -350,11 +376,12 @@ if __name__ == '__main__':
 
         for sequence_idx, sequence in enumerate(seq_info_dict['sequences']):
             for task_id in range(seq_info_dict['num_tasks']):
-                main(lganm_dict=lganm_dict,
-                     task_id=task_id,
-                     seq_str=sequence,
-                     seq_name=prefixes[sequence_idx],
-                     synthesizer=settings['synthesizer'])
+                main(lganm_dict,
+                     task_id,
+                     sequence,
+                     prefixes[sequence_idx],
+                     settings['synthesizer'],
+                     lganm_dict['confounder'])
                 mean_jacob.append(lganm_dict['jacob'])
                 mean_fwer.append(lganm_dict['fwer'])
                 if lganm_dict['jacob'] != 1:

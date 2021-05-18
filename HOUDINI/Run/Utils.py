@@ -110,17 +110,19 @@ def get_portec_io_examples(portec_file,
     return df_trn, df_val, df_tst
 
 
-def get_lganm_io_examples(lganm_envs: Dict,
-                          parents: List[int],
+def get_lganm_io_examples(lganm_envs: List[np.ndarray],
+                          confounder: List[int],
+                        #   parent: List[int],
                           outcome: int,
                           dt_dim: int,
-                          max_len: int=6000) -> Tuple[Tuple, Tuple, Tuple]:
+                          max_len: int = 6000) -> Tuple[Tuple, Tuple, Tuple]:
     """Obtain the lganm data 
 
     Args:
         lganm_envs: dict storing the lganm data 
             collected from different environments
-        parents: the parents (ground-truth) of the outcome var
+        confounder: the list of confounders
+        parent: the parents (ground-truth) of the outcome var
         outcome: outcome variable
         dt_dim: the data feature dimension including 
             candidate causal and outcome variable(s)
@@ -130,23 +132,21 @@ def get_lganm_io_examples(lganm_envs: Dict,
         the train, val, test lganm data 
     """
 
-    # if max_len is None:
-    # mlen = 0
-    # for env in lganm_envs:
-    #     mlen = max(mlen, env.shape[0])
-    # max_len = min(mlen, max_len)
-
     dt_input, dt_lab = list(), list()
-    msk = np.ones(dt_dim, dtype=bool)
-    msk[outcome] = False
+    lab_msk = np.zeros(dt_dim, dtype=bool)
+    lab_msk[outcome] = True
+    cfd_msk = np.ones(dt_dim, dtype=bool)
+    cfd_msk[outcome] = False
+    if confounder:
+        cfd_msk[confounder] = False
     for env_id, env in enumerate(lganm_envs):
         print(env.shape)
         if env.shape[0] < max_len:
             env = pad_array(env, max_len)
         else:
             env = env[:max_len]
-        dt_input.append(env[:, msk])
-        dt_lab.append(env[:, ~msk])
+        dt_input.append(env[:, cfd_msk])
+        dt_lab.append(env[:, lab_msk])
         # dt_lab[-1][:]= env_id
 
     dt_trn = (np.stack(dt_input, 1),

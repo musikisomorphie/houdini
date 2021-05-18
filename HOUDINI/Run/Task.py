@@ -159,10 +159,11 @@ _TaskSettings = NamedTuple('TaskSettings', [
     ('synthesizer', str),  # 'enumerative'| 'evolutionary',
     ('dbg_learn_parameters', bool),  # If False, it won't learn new parameters
     ('learning_rate', float),
-    ('warm_up', int),  # warm-up epoches
     ('var_num', int),
+    ('warm_up', int),  # warm-up epoches
     ('lambda_1', float),  
     ('lambda_2', float),
+    ('lambda_cau', float),
     ('data_dict', dict),
 ])
 
