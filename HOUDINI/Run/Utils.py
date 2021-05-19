@@ -74,45 +74,56 @@ def iterate_diff_training_sizes(train_io_examples, training_data_percentages):
         yield c_tr_io_examples, return_c_num_items
 
 
-def get_portec_io_examples(portec_file,
-                           feat,
-                           label,
-                           fltr=None):
+def get_portec_io_examples(portec_file: pathlib.Path,
+                           causal: List[str],
+                           outcome: str,
+                           fltr: str = None) -> Tuple[Tuple, Tuple, Tuple]:
+    """Obtain the portec data 
+
+    Args:
+        portec_file: the *.sav file storing portec data
+        causal: the candidate causal variables
+        outcome: the outcome data, RFSstatus and RFSyears
+        flter: the filter condition that excludes patient data 
+
+    Returns:
+        the train, val, test portec data 
+    """
+
     df, _ = pyreadstat.read_sav(str(portec_file))
     if fltr is None:
         df = df.fillna(0)
     else:
         df = df.loc[df[fltr] == 1]
-        df = df.dropna(subset=feat)
-        df = df.dropna(subset=label)
-        # df = df.fillna(0)
+        df = df.dropna(subset=causal)
+        df = df.dropna(subset=outcome)
+
     portec = list()
     df_input, df_lab = list(), list()
     max_len = 0
     for i in range(2):
         df_ptc = df.loc[df['PortecStudy'] == i + 1]
-        df_ptc = np.concatenate((df_ptc[feat].values,
-                                 df_ptc[label].values), axis=-1)
+        df_ptc = np.concatenate((df_ptc[causal].values,
+                                 df_ptc[outcome].values), axis=-1)
         portec.append(df_ptc)
         max_len = max(max_len, df_ptc.shape[0])
 
     for ptc_id, ptc in enumerate(portec):
         ptc = pad_array(ptc, max_len)
-        df_input.append(ptc[:, :-len(label)])
-        df_lab.append(ptc[:, -len(label):])
-        # df_input[-1][:, -1] = ptc_id
-        df_lab[-1][:, -1] = ptc_id
+        df_input.append(ptc[:, :-len(outcome)])
+        df_lab.append(ptc[:, -len(outcome):])
+        # df_lab[-1][:] = ptc_id
 
     df_trn = (np.stack(df_input, 1),
               np.stack(df_lab, 1))
-    print(df_trn[0].shape, df_trn[1].shape)
     df_val, df_tst = df_trn, df_trn
+    print(df_trn[0].shape, df_trn[1].shape)
     return df_trn, df_val, df_tst
 
 
 def get_lganm_io_examples(lganm_envs: List[np.ndarray],
                           confounder: List[int],
-                        #   parent: List[int],
+                          #   parent: List[int],
                           outcome: int,
                           dt_dim: int,
                           max_len: int = 6000) -> Tuple[Tuple, Tuple, Tuple]:

@@ -184,47 +184,22 @@ class NetDO(SaveableNNModule):
                  name,
                  input_dim,
                  dt_name):
-        """
-        :param
-        :param output_activation: [None, F.softmax, torch.sigmoid]
-        """
         super(NetDO, self).__init__()
         self.name = name
         self.input_dim = input_dim
         self.dt_name = dt_name
 
-        self.fc1 = nn.Linear(input_dim, input_dim)
-        self.fc2 = nn.Linear(input_dim, input_dim)
-        self.drop1 = nn.Dropout(0.2)
         self.cau_wei = nn.Parameter(data=torch.zeros(
             1, input_dim), requires_grad=True)
-        self.cau_wei0 = nn.Parameter(data=torch.zeros(
-            1, input_dim - 5), requires_grad=True)
-        self.cau_wei1 = nn.Parameter(data=torch.zeros(
-            1, 1), requires_grad=True)
-        self.cau_wei2 = nn.Parameter(data=torch.zeros(
-            1, 1), requires_grad=True)
 
     def forward(self, x):
         if type(x) == tuple:
             x = x[0]
 
-        if self.dt_name.lower() != 'portec':
-            xprob = torch.sigmoid(self.cau_wei)
-            out = xprob * x
-        else:
-            x0, x1, x2 = torch.split(x, [self.input_dim - 5, 3, 2], dim=-1)
-            # x1 = F.leaky_relu(self.fc1(x), inplace=False)
-            # xprob = torch.sigmoid(x1)
-            xprob0 = torch.sigmoid(self.cau_wei0) ** 2
-            xprob1 = torch.sigmoid(self.cau_wei1) ** 2
-            xprob2 = torch.sigmoid(self.cau_wei2) ** 2
-            out = torch.cat((xprob0 * x0,
-                             xprob1 * x1,
-                             xprob2 * x2), dim=-1)
-            xprob = torch.cat((xprob0, xprob1, xprob2), dim=-1)
+        xprob = torch.sigmoid(self.cau_wei)
+        out = xprob * x
 
-        return out, xprob.cpu().detach().numpy()
+        return out, xprob.detach().cpu().numpy()
 
 
 class NetMLP(SaveableNNModule):
@@ -232,28 +207,25 @@ class NetMLP(SaveableNNModule):
                  name,
                  input_dim,
                  output_dim,
-                 bias):
-        """
-        :param
-        :param output_activation: [None, F.softmax, torch.sigmoid]
-        """
+                 dt_name):
         super(NetMLP, self).__init__()
         self.name = name
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-
-        self.fc1 = nn.Linear(input_dim, input_dim)
-        self.fc2 = nn.Linear(input_dim, output_dim, bias=bias)
+        self.dt_name = dt_name
+        self.fc0 = nn.Linear(input_dim, input_dim)
         self.fc = nn.Linear(input_dim, output_dim, bias=False)
-        # self.fc = nn.Parameter(data=torch.ones(
-            # 1, input_dim), requires_grad=True)
+        self.relu = nn.ReLU()
 
     def forward(self, x):
         if type(x) == tuple:
             x, x_prob = x
         else:
             x_prob = None
-
-        x1 = self.fc(x)
+        
+        if self.dt_name == 'portec':
+            x1 = self.fc(self.relu(self.fc0(x)))
+        elif self.dt_name == 'lganm':
+            x1 = self.fc(x)
+        else:
+            raise NotImplementedError()
 
         return x1, x_prob

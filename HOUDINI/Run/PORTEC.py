@@ -1,9 +1,10 @@
 import argparse
 import sys
-import random
+import pathlib
 from collections import namedtuple
 from enum import Enum
 from pathlib import Path
+from typing import Callable, Optional, Dict, Tuple, Union, List
 
 from HOUDINI.Config import config
 from HOUDINI.Run.Task import Task
@@ -13,9 +14,89 @@ from HOUDINI.Run.Utils import get_portec_io_examples
 from HOUDINI.Library.OpLibrary import OpLibrary
 from HOUDINI.Library.FnLibrary import FnLibrary
 from HOUDINI.Synthesizer.AST import mkFuncSort, mkRealTensorSort, mkListSort, mkBoolTensorSort
+sys.path.append('.')
 
-SequenceTaskInfo = namedtuple(
-    'SequenceTaskInfo', ['task_type', 'dataset'])
+SeqTaskInfo = namedtuple(
+    'SeqTaskInfo', ['task_type', 'dataset'])
+
+
+def get_seq_from_string(seq_str: str) -> List[SeqTaskInfo]:
+    """Get the list of sequence task info
+    based on the sequence name
+
+    Args:
+        seq_str: the squence name
+
+    Returns:
+        the list of sequence task info
+    """
+
+    seq = []
+    str_list = seq_str.split(', ')
+    for c_str in str_list:
+        if c_str[:4] == 'surv':
+            c_task_type = TaskType.Surv
+        else:
+            raise NotImplementedError()
+
+        c_dataset = Dataset.PORTEC
+
+        seq.append(SeqTaskInfo(task_type=c_task_type,
+                               dataset=c_dataset))
+
+    return seq
+
+
+def get_seq_info(seq_string: str) -> Dict:
+    """Get sequence info
+
+    Args:
+        seq_string: the key name of the sequence
+
+    Returns:
+        the sequence info dict
+    """
+    seq_dict = {'surv': {'sequences': ['survP'],
+                         'prefixes': ['surv'],
+                         'num_tasks': 1}}
+
+    if not seq_string in seq_dict.keys():
+        raise NameError('the seq {} are not valid'.format(seq_string))
+    return seq_dict[seq_string]
+
+
+def get_task_settings(data_dict: Dict,
+                      dbg_learn_parameters: bool,
+                      synthesizer: str) -> TaskSettings:
+    """Get the TaskSettings namedtuple, which
+    stores important learning parmeters
+
+    Args:
+        data_dict: the dict storing
+        dbg_learn_parameters: True if learn weights False otherwise
+        synthesizer: enumerative or evolutionary
+
+    Returns:
+        the Tasksettings namedtuple
+    """
+
+    task_settings = TaskSettings(
+        train_size=64,
+        val_size=64,
+        training_percentages=[100],
+        N=200,
+        M=1,
+        K=1,
+        synthesizer=synthesizer,
+        dbg_learn_parameters=dbg_learn_parameters,
+        learning_rate=0.02,
+        var_num=len(data_dict['clinical_meta']['causal'].keys()),
+        warm_up=8,
+        lambda_1=9,
+        lambda_2=0.08,
+        lambda_cau=1.,
+        data_dict=data_dict)
+    return task_settings
 
 
 class TaskType(Enum):
@@ -34,10 +115,10 @@ class SurvTask(Task):
                  dbg_learn_parameters):
 
         self.file = portec_dict['file']
-        self.feat = list(portec_dict['clinical_meta']['causal'].keys())
-        self.label = portec_dict['clinical_meta']['outcome']
+        self.causal = list(portec_dict['clinical_meta']['causal'].keys())
+        self.outcome = portec_dict['clinical_meta']['outcome']
         self.flter = list(portec_dict['clinical_meta']['filter'].keys())
-        input_type = mkListSort(mkRealTensorSort([1, len(self.feat)]))
+        input_type = mkListSort(mkRealTensorSort([1, len(self.causal)]))
         output_type = mkRealTensorSort([1, 1])
         fn_sort = mkFuncSort(input_type, output_type)
 
@@ -48,8 +129,8 @@ class SurvTask(Task):
 
     def get_io_examples(self):
         return get_portec_io_examples(self.file,
-                                      self.feat,
-                                      self.label,
+                                      self.causal,
+                                      self.outcome,
                                       self.flter[0])
 
     def name(self):
@@ -59,54 +140,30 @@ class SurvTask(Task):
         return 'surv'
 
 
-def get_task_name(task_info):
-    if task_info.task_type == TaskType.Surv:
-        c_str = 'surv'
-    else:
-        raise NotImplementedError()
-
-    c_str += 'P'
-    c_str += str(task_info.index)
-    return c_str
-
-
-def print_sequence(sequence):
-    str_list = []
-    for task_info in sequence:
-        str_list.append(get_task_name(task_info))
-
-    print('[ ' + ', '.join(str_list) + ' ]')
-
-
-def get_sequence_from_string(sequence_str):
-    '''
-    :param sequence_str: recD3, countT2, recT1, ...  (no initial/closing brackets)
-    '''
-    sequence = []
-    str_list = sequence_str.split(', ')
-    for c_str in str_list:
-        if c_str[:4] == 'surv':
-            c_task_type = TaskType.Surv
-        else:
-            raise NotImplementedError()
-
-        c_dataset = Dataset.PORTEC
-
-        sequence.append(SequenceTaskInfo(task_type=c_task_type,
-                                         dataset=c_dataset))
-
-    return sequence
-
-
 class InferSequence(TaskSeq):
     def __init__(self,
-                 portec_dict,
-                 name,
-                 list_task_info,
-                 dbg_learn_parameters,
-                 seq_settings,
-                 task_settings,
-                 lib):
+                 portec_dict: Dict,
+                 name: str,
+                 list_task_info: List[SeqTaskInfo],
+                 dbg_learn_parameters: bool,
+                 seq_settings: TaskSeqSettings,
+                 task_settings: TaskSettings,
+                 lib: OpLibrary):
+        """The class of the sequence task
+
+        Args:
+            portec_dict: dict storing portec data info
+            name: task name
+            list_task_info: list of the SeqTaskInfo namedtuple
+            seq: the task squence class
+            dbg_learn_parameters: True if learn weights
+                False otherwise
+            seq_settings: the settings for the learning sequence
+            task_settings: the task settings storing important
+                learning parameters
+            lib: the library of higher order functions (Op)
+        """
+
         self._name = name
         tasks = []
         for _, task_info in enumerate(list_task_info):
@@ -129,82 +186,37 @@ class InferSequence(TaskSeq):
         return self._name
 
 
-def get_sequence_info(seq_string):
-    seq_dict = {'surv': {'sequences': ['survP'],
-                         'prefixes': ['surv'],
-                         'num_tasks': 1}}
+def main(portec_dict: Dict,
+         task_id: int,
+         seq_str: str,
+         seq_name: str,
+         synthesizer: str):
+    """The main function that runs the portec experiments
 
-    if not seq_string in seq_dict.keys():
-        raise NameError('the seq {} are not valid'.format(seq_string))
-    return seq_dict[seq_string]
-
-
-def get_task_settings(data_dict,
-                      dbg_mode,
-                      dbg_learn_parameters,
-                      synthesizer=None):
-    '''
-    :param dbg_mode:
-    :param synthesizer_type: None, enumerative, evolutionary
-    :return:
-    '''
-    if not dbg_mode:
-        task_settings = TaskSettings(
-            train_size=128,
-            val_size=128,
-            batch_size=128,
-            training_percentages=[2, 10, 20, 50, 100],
-            N=10000,
-            M=50,
-            K=50,
-            epochs=30,
-            synthesizer=synthesizer,
-            dbg_learn_parameters=dbg_learn_parameters,
-            learning_rate=0.02,
-            data_dict=data_dict)
-    else:
-        task_settings = TaskSettings(
-            train_size=64,
-            val_size=64,
-            batch_size=64,
-            training_percentages=[100],
-            N=200,
-            M=1,
-            K=1,
-            epochs=8,
-            synthesizer=synthesizer,
-            dbg_learn_parameters=dbg_learn_parameters,
-            learning_rate=0.02 ,
-            data_dict=data_dict)
-    return task_settings
-
-
-def mk_default_lib():
-    lib = OpLibrary(['do', 'compose', 'map',
-                     'repeat', 'cat'])
-    return lib
-
-
-def main(portec_dict,
-         task_id,
-         sequence_str,
-         sequence_name,
-         synthesizer):
+    Args:
+        portec_dict: dict storing portec data info
+        task_id: the id of the task
+        list_task_info: list of the SeqTaskInfo namedtuple
+        seq_str: the prefix name that retrieves the seq info dict
+        seq_name: name of the sequence
+        synthesizer: enumerative or evolutionary
+        confounder: the list of confounders
+    """
 
     seq_settings = TaskSeqSettings(update_library=True,
                                    results_dir=settings['results_dir'])
 
     task_settings = get_task_settings(portec_dict,
-                                      settings['dbg_mode'],
                                       settings['dbg_learn_parameters'],
                                       synthesizer=synthesizer)
-    lib = mk_default_lib()
 
-    seq_tasks_info = get_sequence_from_string(sequence_str)
-    print_sequence(seq_tasks_info)
+    lib = OpLibrary(['do', 'compose', 'map',
+                     'repeat', 'cat'])
+
+    seq_tasks_info = get_seq_from_string(seq_str)
 
     seq = InferSequence(portec_dict,
-                        sequence_name,
+                        seq_name,
                         seq_tasks_info,
                         settings['dbg_learn_parameters'],
                         seq_settings,
@@ -220,9 +232,15 @@ def parse_args():
                         choices=['enumerative', 'evolutionary'],
                         default='enumerative',
                         help='Synthesizer type. (default: %(default)s)')
-    parser.add_argument('--dbg',
-                        action='store_true',
-                        help='If set, the sequences run for a tiny amount of data')
+    parser.add_argument('--portec-dir',
+                        type=pathlib.Path,
+                        default='/home/histopath/Data/PORTEC/',
+                        metavar='DIR')
+    parser.add_argument('--confounder',
+                        type=str,
+                        choices=['immu', 'mole', 'path'],
+                        default='immu',
+                        help='the experiments with confounders. (default: %(default)s)')
     parser.add_argument('--dt-file',
                         type=Path,
                         default='/mnt/sda1/Data/PORTEC/PORTEC.sav',
@@ -241,50 +259,48 @@ if __name__ == '__main__':
     # python -m HOUDINI.Run.PORTEC --dt-file /home/histopath/Data/PORTEC/PORTEC12-1-2-21_prep.sav --dbg
     args = parse_args()
 
-    settings = {'results_dir': 'Results',  # str(sys.argv[1])
+    settings = {'results_dir': str(args.portec_dir / 'Results' / args.confounder),
                 # If False, the interpreter doesn't learn the new parameters
                 'dbg_learn_parameters': True,
-                'dbg_mode': args.dbg,  # If True, the sequences run for a tiny amount of data
                 'synthesizer': args.synthesizer,  # enumerative, evolutionary
                 'seq_string': 'surv'}
 
-    portec_dict = config('HOUDINI/Yaml/PORTEC.yaml')
-    if 'prep' in args.dt_file.stem:
-        portec_dict = portec_dict['ImmunePrep']
-    else:
-        portec_dict = portec_dict['ImmuneOrg']
+    res_dict = {'id': list(),
+                'reject': list(),
+                'accept': list(),
+                'target': list(),
+                'truth': list(),
+                'grads': list(),
+                'likelihood': list(),
+                'jacob': list(),
+                'fwer': list(),
+                'error': list()}
 
-    mid_size = len(portec_dict['clinical_meta']['causal'].keys()) + \
-        len(portec_dict['clinical_meta']['outcome'])
-    portec_parm = {'dict_name': 'portec',
-                   'file': args.dt_file,
-                   'repeat': args.repeat,
-                   'mid_size': mid_size,
-                   'out_type': 'hazard',
-                   'env_num': 2}
-    portec_dict.update(portec_parm)
-
-    # portec_dict.update({'dict_name': 'portec'})
-    # portec_dict.update({'file': args.dt_file})
-    # portec_dict.update({'repeat': args.repeat})
-    # portec_dict.update({'mid_size':
-    #                     len(portec_dict['clinical_meta']['causal'].keys())})
-
-    seq_info_dict = get_sequence_info(settings['seq_string'])
-
-    # num_tasks = seq_info_dict['num_tasks']
+    seq_info_dict = get_seq_info(settings['seq_string'])
     additional_prefix = '_np_{}'.format(
         'td' if settings['synthesizer'] == 'enumerative' else 'ea')
     prefixes = ['{}{}'.format(prefix, additional_prefix)
                 for prefix in seq_info_dict['prefixes']]
 
+    portec_dict = config('HOUDINI/Yaml/PORTEC.yaml')
+    portec_dict = portec_dict[args.confounder]
+    mid_size = len(portec_dict['clinical_meta']['causal'].keys()) + \
+        len(portec_dict['clinical_meta']['outcome'])
+    portec_parm = {'dict_name': 'portec',
+                   'file': args.portec_dir / 'PORTEC12-1-2-21_prep.sav',
+                   'repeat': args.repeat,
+                   'mid_size': mid_size,
+                   'out_type': 'hazard',
+                   'env_num': 2,
+                   'results_dir': args.portec_dir / 'Results' / args.confounder}
+    portec_dict.update(portec_parm)
+    pathlib.Path(portec_dict['results_dir']).mkdir(
+        parents=True, exist_ok=True)
+
     for sequence_idx, sequence in enumerate(seq_info_dict['sequences']):
         for task_id in range(seq_info_dict['num_tasks']):
-            portec_dict['res_dir'] = Path(settings['results_dir']) / \
-                prefixes[sequence_idx]
-            portec_dict['res_dir'].mkdir(parents=True, exist_ok=True)
-            main(portec_dict=portec_dict,
-                 task_id=task_id,
-                 sequence_str=sequence,
-                 sequence_name=prefixes[sequence_idx],
-                 synthesizer=settings['synthesizer'])
+            main(portec_dict,
+                 task_id,
+                 sequence,
+                 prefixes[sequence_idx],
+                 settings['synthesizer'])

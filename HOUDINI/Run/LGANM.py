@@ -26,25 +26,6 @@ SeqTaskInfo = namedtuple(
     'SeqTaskInfo', ['task_type', 'dataset'])
 
 
-def print_seq(seq: List[SeqTaskInfo]):
-    """print the sequence info
-
-    Args:
-        seq: the list of task info sequence
-    """
-    str_list = []
-    for task_info in seq:
-        if task_info.task_type == TaskType.Identify:
-            c_str = 'idef'
-        else:
-            raise NotImplementedError()
-
-        c_str += 'L'
-        c_str += str(task_info.index)
-        str_list.append(c_str)
-    print('[ ' + ', '.join(str_list) + ' ]')
-
-
 def get_seq_from_string(seq_str: str) -> List[SeqTaskInfo]:
     """Get the list of sequence task info
     based on the sequence name
@@ -70,54 +51,6 @@ def get_seq_from_string(seq_str: str) -> List[SeqTaskInfo]:
     return seq
 
 
-def get_task_settings(data_dict: Dict,
-                      dbg_learn_parameters: bool,
-                      synthesizer: str,
-                      confounder: List[int]) -> TaskSettings:
-    """Get the TaskSettings namedtuple, which
-    stores important learning parmeters
-
-    Args:
-        data_dict: the dict storing 
-        dbg_learn_parameters: True if learn weights False otherwise
-        synthesizer: enumerative or evolutionary
-
-    Returns:
-        the Tasksettings namedtuple 
-    """
-
-    if len(confounder) == 0:
-        lambda_1 = 9
-        lambda_2 = 0.08
-    elif len(confounder) == 1:
-        lambda_1 = 18
-        lambda_2 = 0.09
-    elif len(confounder) == 2:
-        lambda_1 = 9
-        lambda_2 = 0.16
-    else:
-        raise NotImplementedError('the coeff is not implemented '
-                                  'for {} confounder(s)'.format(len(confounder)))
-
-    task_settings = TaskSettings(
-        train_size=64,
-        val_size=64,
-        training_percentages=[100],
-        N=5000,
-        M=1,
-        K=1,
-        synthesizer=synthesizer,
-        dbg_learn_parameters=dbg_learn_parameters,
-        learning_rate=0.02,
-        var_num=data_dict['envs'][0].shape[1] - 1 - len(confounder),
-        warm_up=8,
-        lambda_1=lambda_1,
-        lambda_2=lambda_2,
-        lambda_cau=10.,
-        data_dict=data_dict)
-    return task_settings
-
-
 def get_seq_info(seq_string: str) -> Dict:
     """Get sequence info
 
@@ -134,6 +67,57 @@ def get_seq_info(seq_string: str) -> Dict:
     if not seq_string in seq_dict.keys():
         raise NameError('the seq {} are not valid'.format(seq_string))
     return seq_dict[seq_string]
+
+
+def get_task_settings(data_dict: Dict,
+                      dbg_learn_parameters: bool,
+                      synthesizer: str,
+                      confounder: List[int]) -> TaskSettings:
+    """Get the TaskSettings namedtuple, which
+    stores important learning parmeters
+
+    Args:
+        data_dict: the dict storing
+        dbg_learn_parameters: True if learn weights False otherwise
+        synthesizer: enumerative or evolutionary
+
+    Returns:
+        the Tasksettings namedtuple
+    """
+
+    if len(confounder) == 0:
+        lambda_1 = 9
+        lambda_2 = 0.08
+        lr = 0.02
+    elif len(confounder) == 1:
+        lambda_1 = 16
+        lambda_2 = 0.16
+        lr = 0.02
+    elif len(confounder) == 2:
+        lambda_1 = 18
+        lambda_2 = 0.2
+        lr = 0.03
+    else:
+        raise NotImplementedError('the coeff is not implemented '
+                                  'for {} confounder(s)'.format(len(confounder)))
+
+    task_settings = TaskSettings(
+        train_size=64,
+        val_size=64,
+        training_percentages=[100],
+        N=5000,
+        M=1,
+        K=1,
+        synthesizer=synthesizer,
+        dbg_learn_parameters=dbg_learn_parameters,
+        learning_rate=lr,
+        var_num=data_dict['envs'][0].shape[1] - 1 - len(confounder),
+        warm_up=8,
+        lambda_1=lambda_1,
+        lambda_2=lambda_2,
+        lambda_cau=10.,
+        data_dict=data_dict)
+    return task_settings
 
 
 class TaskType(Enum):
@@ -156,10 +140,10 @@ class IdentifyTask(Task):
 
         Args:
             lganm_dict: dict storing lganm data info
-            settings: the namedtuple storing important 
+            settings: the namedtuple storing important
                 learning parameters
             seq: the task squence class
-            dbg_learn_parameters: True if learn weights 
+            dbg_learn_parameters: True if learn weights
                 False otherwise
             confounder: the list of confounders
         """
@@ -209,10 +193,10 @@ class InferSequence(TaskSeq):
             name: task name
             list_task_info: list of the SeqTaskInfo namedtuple
             seq: the task squence class
-            dbg_learn_parameters: True if learn weights 
+            dbg_learn_parameters: True if learn weights
                 False otherwise
             seq_settings: the settings for the learning sequence
-            task_settings: the task settings storing important 
+            task_settings: the task settings storing important
                 learning parameters
             lib: the library of higher order functions (Op)
             confounder: the list of confounders
@@ -269,7 +253,6 @@ def main(lganm_dict: Dict,
                      'repeat', 'cat'])
 
     seq_tasks_info = get_seq_from_string(seq_str)
-    print_seq(seq_tasks_info)
 
     seq = InferSequence(lganm_dict,
                         seq_name,
@@ -292,8 +275,7 @@ def parse_args():
     parser.add_argument('--lganm-dir',
                         type=pathlib.Path,
                         default='/home/histopath/Data/LGANM/',
-                        metavar='DIR',
-                        help='path to the visualization folder')
+                        metavar='DIR')
     parser.add_argument('--exp',
                         choices=['fin', 'abcd'],
                         default='fin',
@@ -347,19 +329,31 @@ if __name__ == '__main__':
     mean_fwer = list()
     wrong_list = list()
 
+    large_truth = 0
     pkl_dir = args.lganm_dir / args.exp / 'n_1000'
     for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
-        if pkl_id > 600:
+        if pkl_id > 400:
             continue
     # for pkl_id in ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']:
-        # pkl_file = args.lganm_dir / args.exp / \
-            # 'n_1000' / '{}.pickle'.format(pkl_id)
+    #     pkl_file = args.lganm_dir / args.exp / \
+    #         'n_1000' / '{}.pickle'.format(pkl_id)
         with open(str(pkl_file), 'rb') as pl:
             lganm_dict = pickle.load(pl)
             if len(lganm_dict['truth']) - args.confounder == 0:
                 print('This experiment does not have parents, thus ignore.')
                 continue
             lganm_dict['truth'] = list(lganm_dict['truth'])
+            lganm_dict['weight'] = list()
+            dag_wei = lganm_dict['case'].sem.W
+            for var in lganm_dict['truth']:
+                lganm_dict['weight'].append(dag_wei[var, lganm_dict['target']])
+                print(var, lganm_dict['weight'][-1])
+            truth, weight = zip(
+                *sorted(zip(lganm_dict['truth'], lganm_dict['weight']),
+                        key=lambda t: t[1]))
+            print(truth, weight)
+            print()
+            print()
             print('\n\n all the parents: {}, outcome: {}'.format(
                 lganm_dict['truth'], lganm_dict['target']))
             lganm_dict['confounder'] = lganm_dict['truth'][:args.confounder]
@@ -402,3 +396,4 @@ if __name__ == '__main__':
     print(sum(mean_fwer) / len(mean_fwer))
     print(sum(mean_jacob) / len(mean_jacob))
     print(res_dict['error'])
+    print(large_truth)

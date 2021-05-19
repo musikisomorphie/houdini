@@ -28,7 +28,7 @@ def get_nn_from_params_dict(uf: Dict) -> Tuple[nn.Module, List]:
         new_nn = NetMLP(uf['name'],
                         uf['input_dim'],
                         uf['output_dim'],
-                        uf['bias'])
+                        uf['dt_name'])
     elif uf['type'] == 'DO':
         new_nn = NetDO(uf['name'],
                        uf['input_dim'],
