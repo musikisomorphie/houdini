@@ -482,7 +482,7 @@ class Interpreter:
                                                sota_fns_dict,
                                                prog_fns_dict,
                                                val_mse)
-                sota_acc, sota_mse, sota_grad, sota_fns_dict = sota_tuple
+                sota_mse, _, _, sota_fns_dict = sota_tuple
 
             wass_dis, cur_mean = self._wass(val_mse, sota_mse)
             coef = self.settings.lambda_1 * \
