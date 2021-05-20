@@ -78,6 +78,8 @@ path:
             MyometrialInvasion: 0
             Grade_2Cat: 0
             LVSI_2Cat: 0
+        causal_num: 3
+        causal_grp: [[0], [1,2], [3,4,5]]
         outcome:
             - RFSstatus
             - RFSYears
@@ -101,6 +103,8 @@ mole:
             POLE: 0
             MMRd: 0
             p53_mutant: 0
+        causal_num: 5
+        causal_grp: [[0], [1,2], [3, 4, 5], [6], [7, 8, 9]]
         outcome:
             - RFSstatus
             - RFSYears
@@ -125,6 +129,8 @@ immu:
             MMRd: 0
             p53_mutant: 0
             log2_av_tot_cd8t: 0
+        causal_num: 6
+        causal_grp: [[0], [1,2], [3, 4, 5], [6], [7, 8, 9], [10]]
         outcome:
             - RFSstatus
             - RFSYears

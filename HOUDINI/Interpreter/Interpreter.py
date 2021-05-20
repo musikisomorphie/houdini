@@ -209,7 +209,7 @@ class Interpreter:
         self._clone_weights_state(prog_fns_dict,
                                   sota_fns_dict)
         if val_grad is not None:
-            sota_grad = val_grad * parm_do.cpu().numpy()
+            sota_grad = np.abs(val_grad) * parm_do.cpu().numpy()
         return sota_acc, sota_mse, sota_grad, sota_fns_dict
 
     def _predict_data(self,
@@ -400,7 +400,7 @@ class Interpreter:
                              unknown_fns: List[Dict],
                              data_loader_trn: NumpyDataSetIterator,
                              data_loader_val: NumpyDataSetIterator,
-                             data_loader_tst: NumpyDataSetIterator) -> Tuple:
+                             data_loader_tst: NumpyDataSetIterator) -> Dict:
 
         prog_fns_dict, trainable_parameters = self._create_fns(unknown_fns)
         parm_all = trainable_parameters['do'] + trainable_parameters['non-do']
@@ -438,18 +438,29 @@ class Interpreter:
                                                val_grad,
                                                parm_do[0][0].detach())
                 sota_acc, sota_mse, sota_grad, sota_fns_dict = sota_tuple
-            # print(sota_acc)
-        print('Warm-up phase finished. \n')
 
         for new_fn_name, new_fn in prog_fns_dict.items():
             if issubclass(type(new_fn), nn.Module):
                 new_fn.load_state_dict(
                     sota_fns_dict[new_fn_name])
 
+        if self.output_type == ProgramOutputType.HAZARD:
+            grad_grp = list()
+            caus_grp = self.data_dict['clinical_meta']['causal_grp']
+            # sort the causal group based on the mean gradient weight
+            for cau in caus_grp:
+                grad_grp.append(np.mean(sota_grad[cau]))
+            sota_ord_idx, _ = zip(*sorted(zip(caus_grp,
+                                              grad_grp),
+                                          key=lambda t: t[1]))
+        else:
+            sota_ord_idx = np.argsort(sota_grad).tolist()
+        print('Warm-up phase finished. \n')
+
         ###################################################################
         ########################Causal Training############################
         ###################################################################
-        reject_var, accept_var = set(), set()
+        reject_var, accept_var = list(), list()
         sota_idx = None
         is_penalize_var = True
         while len(accept_var) + len(reject_var) < self.settings.var_num:
@@ -457,7 +468,7 @@ class Interpreter:
             # obtain the variable index
             if is_penalize_var:
                 with torch.no_grad():
-                    for idx in np.argsort(sota_grad).tolist():
+                    for idx in sota_ord_idx:
                         if not ((idx in accept_var) or (idx in reject_var)):
                             sota_idx = idx
                             prob = parm_do[0].detach().clone()
@@ -486,18 +497,18 @@ class Interpreter:
 
             wass_dis, cur_mean = self._wass(val_mse, sota_mse)
             coef = self.settings.lambda_1 * \
-                (sota_grad[sota_idx] < self.settings.lambda_2)
+                (np.mean(sota_grad[sota_idx]) < self.settings.lambda_2)
             if wass_dis > coef * sota_acc:
                 if is_penalize_var:
                     is_penalize_var = False
                     continue
-                accept_var.add(sota_idx)
+                accept_var.append(sota_idx)
                 for new_fn_name, new_fn in prog_fns_dict.items():
                     if issubclass(type(new_fn), nn.Module):
                         new_fn.load_state_dict(
                             sota_fns_dict[new_fn_name])
             else:
-                reject_var.add(sota_idx)
+                reject_var.append(sota_idx)
                 self._clone_weights_state(prog_fns_dict,
                                           sota_fns_dict)
             is_penalize_var = True
@@ -523,7 +534,7 @@ class Interpreter:
         self.data_dict['likelihood'] = torch.sigmoid(
             parm_do[0][0]).detach().cpu().numpy()
         self.data_dict['grads'] = sota_grad
-        return prog_fns_dict, val_grad, val_score
+        return prog_fns_dict
 
     def evaluate_(self,
                   program: str,
@@ -559,11 +570,17 @@ class Interpreter:
                 if not dbg_learn_parameters:
                     prog_fns_dict, _ = self._create_fns(unknown_fns_def)
                 else:
-                    prog_fns_dict, val_grad, val_score = self.learn_neural_network(program,
-                                                                                   unknown_fns_def,
-                                                                                   data_loader_trn,
-                                                                                   data_loader_val,
-                                                                                   data_loader_tst)
+                    prog_fns_dict = self.learn_neural_network(program,
+                                                              unknown_fns_def,
+                                                              data_loader_trn,
+                                                              data_loader_val,
+                                                              data_loader_tst)
+
+            val_mse, val_grad, val_score = self._get_accuracy(data_loader_val,
+                                                              program,
+                                                              prog_fns_dict,
+                                                              compute_grad=True)
+
             if self.output_type == ProgramOutputType.HAZARD:
                 val_grads.append(val_grad)
                 val_scores.append(val_score)
@@ -604,9 +621,7 @@ class Interpreter:
         return res
 
     def _wass(self, res, cur_res):
-        # bat_size = res.shape[0] // self.data_dict['env_num']
         wass_dis = list()
-        # mean_list = list()
         cur_res = np.array(cur_res)
         cur_mean = np.mean(cur_res)
         cur_std = np.std(cur_res)

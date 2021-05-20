@@ -90,11 +90,11 @@ def get_task_settings(data_dict: Dict,
         synthesizer=synthesizer,
         dbg_learn_parameters=dbg_learn_parameters,
         learning_rate=0.02,
-        var_num=len(data_dict['clinical_meta']['causal'].keys()),
+        var_num=data_dict['clinical_meta']['causal_num'],
         warm_up=8,
         lambda_1=9,
         lambda_2=0.08,
-        lambda_cau=1.,
+        lambda_cau=10.,
         data_dict=data_dict)
     return task_settings
 
