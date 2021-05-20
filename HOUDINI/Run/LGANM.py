@@ -308,28 +308,13 @@ if __name__ == '__main__':
     pathlib.Path(settings['results_dir']).mkdir(
         parents=True, exist_ok=True)
 
-    res_dict = {'id': list(),
-                'reject': list(),
-                'accept': list(),
-                'target': list(),
-                'truth': list(),
-                'grads': list(),
-                'likelihood': list(),
-                'jacob': list(),
-                'fwer': list(),
-                'error': list()}
-
     seq_info_dict = get_seq_info(settings['seq_string'])
     additional_prefix = '_np_{}'.format(
         'td' if settings['synthesizer'] == 'enumerative' else 'ea')
     prefixes = ['{}{}'.format(prefix, additional_prefix)
                 for prefix in seq_info_dict['prefixes']]
 
-    mean_jacob = list()
-    mean_fwer = list()
-    wrong_list = list()
-
-    large_truth = 0
+    jacads, fwers, errors = list(), list(), list()
     pkl_dir = args.lganm_dir / args.exp / 'n_1000'
     for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
         if pkl_id > 400:
@@ -363,7 +348,7 @@ if __name__ == '__main__':
             lganm_parm = {'dict_name': 'lganm',
                           'repeat': args.repeat,
                           'mid_size': lganm_dict['envs'][0].shape[1],
-                          'out_type': 'integer',
+                          'out_type': 'mse',
                           'env_num': len(lganm_dict['envs'])}
             lganm_dict.update(lganm_parm)
 
@@ -375,25 +360,17 @@ if __name__ == '__main__':
                      prefixes[sequence_idx],
                      settings['synthesizer'],
                      lganm_dict['confounder'])
-                mean_jacob.append(lganm_dict['jacob'])
-                mean_fwer.append(lganm_dict['fwer'])
-                if lganm_dict['jacob'] != 1:
-                    res_dict['error'].append(pkl_file.stem)
-
-                for key in res_dict:
-                    if key not in ('error', 'id'):
-                        res_dict[key].append(lganm_dict[key])
-                res_dict['id'].append(pkl_file.stem)
-                print(res_dict['accept'][-1],
-                      res_dict['truth'][-1], res_dict['target'][-1])
-        print('the jacarrd accuracy: ', sum(mean_jacob) / len(mean_jacob))
-        print('the jacarrd accuracy: ', sum(mean_jacob) / len(mean_jacob))
-        print('the fwer accuracy: ', sum(mean_fwer) / len(mean_fwer))
-    pkl_nm = pathlib.Path(settings['results_dir']) / 'n_1000_res.pickle'
-    with open(str(pkl_nm), 'wb') as pl:
-        pickle.dump(res_dict, pl)
-
-    print(sum(mean_fwer) / len(mean_fwer))
-    print(sum(mean_jacob) / len(mean_jacob))
-    print(res_dict['error'])
-    print(large_truth)
+                jacads.extend(lganm_dict['jacads'])
+                fwers.extend(lganm_dict['fwers'])
+                if np.all(np.asarray(lganm_dict['fwers']) == 1.):
+                    errors.append(pkl_file.stem)
+                print('Jaccard Similarity (JS): {}.'.format(
+                    sum(jacads) / len(jacads)))
+                print('Family-wise error rate (FWER): {}'.format(
+                    sum(fwers) / len(fwers)))
+    jacads = np.asarray(jacads)
+    fwers = np.asarray(fwers)
+    print('\nJaccard Similarity (JS) mean: {}, std: {}.'.format(
+        np.mean(jacads), np.std(jacads)))
+    print('Family-wise error rate (FWER) mean: {}, std: {}.'.format(
+        np.mean(fwers), np.std(fwers)))

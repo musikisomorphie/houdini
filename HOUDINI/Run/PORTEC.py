@@ -1,6 +1,7 @@
 import argparse
 import sys
 import pathlib
+import numpy as np
 from collections import namedtuple
 from enum import Enum
 from pathlib import Path
@@ -265,17 +266,6 @@ if __name__ == '__main__':
                 'synthesizer': args.synthesizer,  # enumerative, evolutionary
                 'seq_string': 'surv'}
 
-    res_dict = {'id': list(),
-                'reject': list(),
-                'accept': list(),
-                'target': list(),
-                'truth': list(),
-                'grads': list(),
-                'likelihood': list(),
-                'jacob': list(),
-                'fwer': list(),
-                'error': list()}
-
     seq_info_dict = get_seq_info(settings['seq_string'])
     additional_prefix = '_np_{}'.format(
         'td' if settings['synthesizer'] == 'enumerative' else 'ea')
@@ -304,3 +294,9 @@ if __name__ == '__main__':
                  sequence,
                  prefixes[sequence_idx],
                  settings['synthesizer'])
+    jacads = np.asarray(portec_dict['jacads'])
+    fwers = np.asarray(portec_dict['fwers'])
+    print('\nJaccard Similarity (JS) mean: {}, std: {}.'.format(
+        np.mean(jacads), np.std(jacads)))
+    print('Family-wise error rate (FWER) mean: {}, std: {}.'.format(
+        np.mean(fwers), np.std(fwers)))

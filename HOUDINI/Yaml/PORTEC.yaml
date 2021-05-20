@@ -87,6 +87,7 @@ path:
         - Concord_Index
         - Brier_Score
         - Binomial_Log-Likelihood
+    truth: [[3, 4, 5]] # align with lganm, assumed the gt causal variables
 
 mole:
     clinical_meta:
@@ -112,6 +113,7 @@ mole:
         - Concord_Index
         - Brier_Score
         - Binomial_Log-Likelihood
+    truth: [[3, 4, 5], [6], [7, 8, 9]]
 
 immu:
     clinical_meta:
@@ -138,6 +140,7 @@ immu:
         - Concord_Index
         - Brier_Score
         - Binomial_Log-Likelihood
+    truth: [[3, 4, 5], [6], [7, 8, 9], [10]]
 
 
 

@@ -24,7 +24,7 @@ from HOUDINI.Library.OpLibrary import OpLibrary
 
 
 class ProgramOutputType(Enum):
-    INTEGER = 1,  # using l2 regression, evaluating using round up/down
+    MSE = 1,  # using l2 regression, evaluating using round up/down
     SIGMOID = 2,
     SOFTMAX = 3,
     HAZARD = 4
@@ -54,8 +54,8 @@ class Interpreter:
             self.output_type = ProgramOutputType.HAZARD
             self.criterion = Loss.cox_ph_loss
             self.metric = Loss.cox_ph_loss
-        elif self.data_dict['out_type'] == 'integer':
-            self.output_type = ProgramOutputType.INTEGER
+        elif self.data_dict['out_type'] == 'mse':
+            self.output_type = ProgramOutputType.MSE
             self.criterion = nn.MSELoss(reduction='none')
             self.metric = F.mse_loss
         else:
@@ -369,7 +369,7 @@ class Interpreter:
             grad_out = cox_grads
             score_out = cox_scores
         else:
-            if self.output_type == ProgramOutputType.INTEGER:
+            if self.output_type == ProgramOutputType.MSE:
                 if compute_grad:
                     grad_all = list()
                     for x_in in x_all:
@@ -400,7 +400,7 @@ class Interpreter:
                              unknown_fns: List[Dict],
                              data_loader_trn: NumpyDataSetIterator,
                              data_loader_val: NumpyDataSetIterator,
-                             data_loader_tst: NumpyDataSetIterator) -> Dict:
+                             data_loader_tst: NumpyDataSetIterator) -> Tuple:
 
         prog_fns_dict, trainable_parameters = self._create_fns(unknown_fns)
         parm_all = trainable_parameters['do'] + trainable_parameters['non-do']
@@ -444,6 +444,11 @@ class Interpreter:
                 new_fn.load_state_dict(
                     sota_fns_dict[new_fn_name])
 
+        _, warm_grad, warm_score = self._get_accuracy(data_loader_val,
+                                                      program,
+                                                      prog_fns_dict,
+                                                      compute_grad=True)
+
         if self.output_type == ProgramOutputType.HAZARD:
             grad_grp = list()
             caus_grp = self.data_dict['clinical_meta']['causal_grp']
@@ -453,7 +458,7 @@ class Interpreter:
             sota_ord_idx, _ = zip(*sorted(zip(caus_grp,
                                               grad_grp),
                                           key=lambda t: t[1]))
-        else:
+        elif self.output_type == ProgramOutputType.MSE:
             sota_ord_idx = np.argsort(sota_grad).tolist()
         print('Warm-up phase finished. \n')
 
@@ -517,24 +522,24 @@ class Interpreter:
                   accept_var, reject_var)
             print(cur_mean, sota_grad)
 
-        var_list = list(range(self.data_dict['mid_size']))
-        num_cfd = len(self.data_dict['confounder'])
-        # print(self.data_dict['confounder'])
-        var_remove = [self.data_dict['target']] + self.data_dict['confounder']
-        for var in sorted(var_remove, reverse=True):
-            var_list.remove(var)
-        var_np = np.array(var_list)
-        self.data_dict['reject'] = var_np[list(reject_var)]
-        self.data_dict['accept'] = var_np[list(accept_var)]
-        par_set = set(self.data_dict['truth'])
-        cnd_set = set(self.data_dict['accept'].tolist())
-        self.data_dict['jacob'] = (len(par_set.intersection(cnd_set)) + num_cfd) / \
-            (len(par_set.union(cnd_set)) + num_cfd)
-        self.data_dict['fwer'] = not cnd_set.issubset(par_set)
-        self.data_dict['likelihood'] = torch.sigmoid(
-            parm_do[0][0]).detach().cpu().numpy()
-        self.data_dict['grads'] = sota_grad
-        return prog_fns_dict
+        # var_list = list(range(self.data_dict['mid_size']))
+        # num_cfd = len(self.data_dict['confounder'])
+        # # print(self.data_dict['confounder'])
+        # var_remove = [self.data_dict['target']] + self.data_dict['confounder']
+        # for var in sorted(var_remove, reverse=True):
+        #     var_list.remove(var)
+        # var_np = np.array(var_list)
+        # self.data_dict['reject'] = var_np[list(reject_var)]
+        # self.data_dict['accept'] = var_np[list(accept_var)]
+        # par_set = set(self.data_dict['truth'])
+        # cnd_set = set(self.data_dict['accept'].tolist())
+        # self.data_dict['jacad'] = (len(par_set.intersection(cnd_set)) + num_cfd) / \
+        #     (len(par_set.union(cnd_set)) + num_cfd)
+        # self.data_dict['fwer'] = not cnd_set.issubset(par_set)
+        # self.data_dict['likelihood'] = torch.sigmoid(
+        #     parm_do[0][0]).detach().cpu().numpy()
+        # self.data_dict['grads'] = sota_grad
+        return prog_fns_dict, (reject_var, accept_var), (warm_grad, warm_score)
 
     def evaluate_(self,
                   program: str,
@@ -563,6 +568,7 @@ class Interpreter:
 
         prog_fns_dict = dict()
         val_grads, val_scores = list(), list()
+        jacads, fwers = list(), list()
         for _ in range(self.data_dict['repeat']):
             evaluations_np = np.ones((1, 1))
             if unknown_fns_def is not None and \
@@ -570,21 +576,47 @@ class Interpreter:
                 if not dbg_learn_parameters:
                     prog_fns_dict, _ = self._create_fns(unknown_fns_def)
                 else:
-                    prog_fns_dict = self.learn_neural_network(program,
-                                                              unknown_fns_def,
-                                                              data_loader_trn,
-                                                              data_loader_val,
-                                                              data_loader_tst)
+                    prog_fns_dict, variables, warm_up = self.learn_neural_network(program,
+                                                                                  unknown_fns_def,
+                                                                                  data_loader_trn,
+                                                                                  data_loader_val,
+                                                                                  data_loader_tst)
+                    reject_var, accept_var = variables
+                    warm_grad, warm_score = warm_up
 
-            val_mse, val_grad, val_score = self._get_accuracy(data_loader_val,
-                                                              program,
-                                                              prog_fns_dict,
-                                                              compute_grad=True)
+            _, val_grad, val_score = self._get_accuracy(data_loader_val,
+                                                        program,
+                                                        prog_fns_dict,
+                                                        compute_grad=True)
 
             if self.output_type == ProgramOutputType.HAZARD:
                 val_grads.append(val_grad)
                 val_scores.append(val_score)
+                num_cfd = 0
+                reject_var = set(tuple(var) for var in reject_var)
+                accept_var = set(tuple(var) for var in accept_var)
+                causal_var = set(tuple(var) for var in self.data_dict['truth'])
+            elif self.output_type == ProgramOutputType.MSE:
+                var_list = list(range(self.data_dict['mid_size']))
+                num_cfd = len(self.data_dict['confounder'])
+                # print(self.data_dict['confounder'])
+                var_remove = [self.data_dict['target']] + \
+                    self.data_dict['confounder']
+                for var in sorted(var_remove, reverse=True):
+                    var_list.remove(var)
+                var_np = np.array(var_list)
+                reject_var = set(var_np[list(reject_var)].tolist())
+                accept_var = set(var_np[list(accept_var)].tolist())
+                causal_var = set(self.data_dict['truth'])
 
+            jacad = (len(causal_var.intersection(accept_var)) + num_cfd) / \
+                (len(causal_var.union(accept_var)) + num_cfd)
+            fwer = not accept_var.issubset(causal_var)
+            jacads.append(jacad)
+            fwers.append(fwer)
+
+        self.data_dict['jacads'] = jacads
+        self.data_dict['fwers'] = fwers
         if self.output_type == ProgramOutputType.HAZARD:
             val_grads = np.asarray(val_grads)
             val_scores = list(zip(*val_scores))

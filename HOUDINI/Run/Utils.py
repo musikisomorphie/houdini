@@ -224,22 +224,22 @@ def compute_aicp_results(path):
     aicp_results = list(itertools.chain.from_iterable(aicp[1]))
 
     repeat = len(aicp_results) // len(aicp_cases)
-    jacobs = list()
+    jacads = list()
     fwer = list()
     is_false = 0
     for aicp_idx, aicp_res in enumerate(aicp_results):
         case_idx = aicp_idx // repeat
         parents = set(aicp_cases[case_idx].truth)
         par_aicp = set(aicp_res.estimate)
-        jacob = len(parents.intersection(par_aicp)) / \
+        jacad = len(parents.intersection(par_aicp)) / \
             len(parents.union(par_aicp))
-        jacobs.append(jacob)
+        jacads.append(jacad)
         fwer.append(not par_aicp.issubset(parents))
 
         if parents != par_aicp:
             is_false += 1
 
-    print(sum(jacobs) / len(jacobs))
+    print(sum(jacads) / len(jacads))
     print(sum(fwer) / len(fwer))
     print(is_false)
 
@@ -264,10 +264,10 @@ def main():
     # pkl_path = pathlib.Path(
     #     '/home/histopath/Model/LGANM/Results/fin/n_1000_res.pickle')
     # res_dict = load_pickle(pkl_path)
-    # print(sum(res_dict['jacob']) / len(res_dict['jacob']))
+    # print(sum(res_dict['jacad']) / len(res_dict['jacad']))
     # print(sum(res_dict['fwer']) / len(res_dict['fwer']))
     # print(res_dict['error'])
-    # print(len(res_dict['jacob']))
+    # print(len(res_dict['jacad']))
     aicp_path = pathlib.Path('/home/histopath/Data/LGANM/fin/n_1000.pickle')
     aicp_tests = compute_aicp_results(aicp_path)
 
