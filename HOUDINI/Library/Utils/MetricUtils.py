@@ -12,11 +12,13 @@ class coxsum():
     def __init__(self,
                  index,
                  params,
-                 alpha=0.05):
+                 alpha=0.05,
+                 file_nm='portec'):
         self.alpha = alpha
         self.ci = 100 * (1 - self.alpha)
         self.z = self._inv_normal_cdf(1 - self.alpha / 2)
         self.index = index
+        self.file_nm = file_nm
         # be careful with the axis
         self.param = pd.Series(np.mean(params, axis=0),
                                name='param',
@@ -69,7 +71,7 @@ class coxsum():
         df : DataFrame
         """
 
-        filename = str(df_path / 'portec_table')
+        filename = str(df_path / self.file_nm)
         with np.errstate(invalid='ignore', divide='ignore', over='ignore', under='ignore'):
             df = pd.DataFrame(index=self.index)
             df.index.name = 'features'
@@ -89,11 +91,11 @@ class coxsum():
             df['z'] = self._compute_z_values()
             df['p'] = self._compute_p_values()
             # avoid zero
-            df.loc[df['p'] <= 1e-7, 'p'] = 1e-7
+            df.loc[df['p'] <= 1e-16, 'p'] = 1e-16
             df['-log2(p)'] = -self._quiet_log2(df['p'])
-            # 3 digits after decimal
+            # 4 digits after decimal
             df.update(df.iloc[:, ].apply(
-                lambda x: (x * 1e2).astype(int) / 1e2))
+                lambda x: (x * 1e3).astype(int) / 1e3))
 
         doc = pl.Document()
         doc.packages.append(pl.Package('adjustbox'))
@@ -125,11 +127,12 @@ class coxsum():
             axi.boxplot(scores[ida],
                         vert=True,  # vertical box alignment
                         patch_artist=True,
-                        labels=[labels[ida]])  # fill with color
+                        labels=[labels[ida]],
+                        showfliers=False)  # fill with color
             # if titles is not None:
             #     axi.set_title(titles[ida])
         plt.tight_layout()
-        plt.savefig(str(plot_path / 'portec_box_plot.png'))
+        plt.savefig(str(plot_path / '{}.png'.format(self.file_nm)))
         plt.figure().clear()
         plt.close()
 

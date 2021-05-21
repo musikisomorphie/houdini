@@ -1,5 +1,6 @@
 import argparse
 import sys
+import json
 import pathlib
 import numpy as np
 from collections import namedtuple
@@ -294,9 +295,18 @@ if __name__ == '__main__':
                  sequence,
                  prefixes[sequence_idx],
                  settings['synthesizer'])
-    jacads = np.asarray(portec_dict['jacads'])
-    fwers = np.asarray(portec_dict['fwers'])
+
+    jacads = np.asarray(portec_dict['json_out']['jacads'])
+    fwers = np.asarray(portec_dict['json_out']['fwers'])
+    portec_dict['json_out']['jacads_mean'] = np.mean(jacads)
+    portec_dict['json_out']['jacads_std'] = np.std(jacads)
+    portec_dict['json_out']['fwers_mean'] = np.mean(fwers)
+    portec_dict['json_out']['fwers_std'] = np.std(fwers)
     print('\nJaccard Similarity (JS) mean: {}, std: {}.'.format(
         np.mean(jacads), np.std(jacads)))
     print('Family-wise error rate (FWER) mean: {}, std: {}.'.format(
         np.mean(fwers), np.std(fwers)))
+
+    json_file = portec_dict['results_dir'] / 'portec_table.json'
+    with open(str(json_file), 'w', encoding='utf-8') as f:
+        json.dump(portec_dict['json_out'], f, ensure_ascii=False, indent=4)

@@ -78,8 +78,8 @@ path:
             MyometrialInvasion: 0
             Grade_2Cat: 0
             LVSI_2Cat: 0
-        causal_num: 3
-        causal_grp: [[0], [1,2], [3,4,5]]
+        causal_num: 5
+        causal_grp: [[0], [1,2], [3], [4], [5]]
         outcome:
             - RFSstatus
             - RFSYears
@@ -87,7 +87,7 @@ path:
         - Concord_Index
         - Brier_Score
         - Binomial_Log-Likelihood
-    truth: [[3, 4, 5]] # align with lganm, assumed the gt causal variables
+    truth: [[3], [4], [5]] # align with lganm, assumed the gt causal variables
 
 mole:
     clinical_meta:
@@ -104,8 +104,8 @@ mole:
             POLE: 0
             MMRd: 0
             p53_mutant: 0
-        causal_num: 5
-        causal_grp: [[0], [1,2], [3, 4, 5], [6], [7, 8, 9]]
+        causal_num: 7
+        causal_grp: [[0], [1,2], [3], [4], [5], [6], [7, 8, 9]]
         outcome:
             - RFSstatus
             - RFSYears
@@ -113,7 +113,7 @@ mole:
         - Concord_Index
         - Brier_Score
         - Binomial_Log-Likelihood
-    truth: [[3, 4, 5], [6], [7, 8, 9]]
+    truth: [[3], [4], [5], [6], [7, 8, 9]]
 
 immu:
     clinical_meta:
@@ -131,8 +131,8 @@ immu:
             MMRd: 0
             p53_mutant: 0
             log2_av_tot_cd8t: 0
-        causal_num: 6
-        causal_grp: [[0], [1,2], [3, 4, 5], [6], [7, 8, 9], [10]]
+        causal_num: 8
+        causal_grp: [[0], [1,2], [3], [4], [5], [6], [7, 8, 9], [10]]
         outcome:
             - RFSstatus
             - RFSYears
@@ -140,7 +140,7 @@ immu:
         - Concord_Index
         - Brier_Score
         - Binomial_Log-Likelihood
-    truth: [[3, 4, 5], [6], [7, 8, 9], [10]]
+    truth: [[3], [4], [5], [6], [7, 8, 9], [10]]
 
 
 

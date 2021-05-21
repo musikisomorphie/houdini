@@ -336,15 +336,6 @@ class Interpreter:
             y = np.split(y, x_in.shape[1], axis=0)
             y_debug_all.append(y)
 
-            # if compute_grad:
-            #     x_grads = self._compute_grad(x_in.clone(),
-            #                                  program,
-            #                                  prog_fns_dict)
-            #     x_grads = torch.cat(torch.split(
-            #         x_grads, 1, dim=1), dim=0).squeeze()
-            #     x_grads_norm = x_grads.abs().mean(dim=0)
-            #     grad_all.append(x_grads_norm.detach().cpu().numpy())
-
         grad_out, score_out = None, None
         if self.output_type == ProgramOutputType.HAZARD:
             y_all = torch.cat(y_all, dim=0)
@@ -439,16 +430,6 @@ class Interpreter:
                                                parm_do[0][0].detach())
                 sota_acc, sota_mse, sota_grad, sota_fns_dict = sota_tuple
 
-        for new_fn_name, new_fn in prog_fns_dict.items():
-            if issubclass(type(new_fn), nn.Module):
-                new_fn.load_state_dict(
-                    sota_fns_dict[new_fn_name])
-
-        _, warm_grad, warm_score = self._get_accuracy(data_loader_val,
-                                                      program,
-                                                      prog_fns_dict,
-                                                      compute_grad=True)
-
         if self.output_type == ProgramOutputType.HAZARD:
             grad_grp = list()
             caus_grp = self.data_dict['clinical_meta']['causal_grp']
@@ -460,6 +441,17 @@ class Interpreter:
                                           key=lambda t: t[1]))
         elif self.output_type == ProgramOutputType.MSE:
             sota_ord_idx = np.argsort(sota_grad).tolist()
+
+        for new_fn_name, new_fn in prog_fns_dict.items():
+            if issubclass(type(new_fn), nn.Module):
+                new_fn.load_state_dict(
+                    sota_fns_dict[new_fn_name])
+
+        _, warm_grad, warm_score = self._get_accuracy(data_loader_val,
+                                                      program,
+                                                      prog_fns_dict,
+                                                      compute_grad=True)
+        warm_do = parm_do[0][0].detach().cpu().numpy()
         print('Warm-up phase finished. \n')
 
         ###################################################################
@@ -522,24 +514,23 @@ class Interpreter:
                   accept_var, reject_var)
             print(cur_mean, sota_grad)
 
-        # var_list = list(range(self.data_dict['mid_size']))
-        # num_cfd = len(self.data_dict['confounder'])
-        # # print(self.data_dict['confounder'])
-        # var_remove = [self.data_dict['target']] + self.data_dict['confounder']
-        # for var in sorted(var_remove, reverse=True):
-        #     var_list.remove(var)
-        # var_np = np.array(var_list)
-        # self.data_dict['reject'] = var_np[list(reject_var)]
-        # self.data_dict['accept'] = var_np[list(accept_var)]
-        # par_set = set(self.data_dict['truth'])
-        # cnd_set = set(self.data_dict['accept'].tolist())
-        # self.data_dict['jacad'] = (len(par_set.intersection(cnd_set)) + num_cfd) / \
-        #     (len(par_set.union(cnd_set)) + num_cfd)
-        # self.data_dict['fwer'] = not cnd_set.issubset(par_set)
-        # self.data_dict['likelihood'] = torch.sigmoid(
-        #     parm_do[0][0]).detach().cpu().numpy()
-        # self.data_dict['grads'] = sota_grad
-        return prog_fns_dict, (reject_var, accept_var), (warm_grad, warm_score)
+        self._set_weights_mode(prog_fns_dict, is_trn=True)
+        self._train_data(data_loader_trn,
+                         program,
+                         prog_fns_dict,
+                         optim_all)
+        self._set_weights_mode(prog_fns_dict, is_trn=False)
+        _, val_grad, val_score = self._get_accuracy(data_loader_val,
+                                                    program,
+                                                    prog_fns_dict,
+                                                    compute_grad=True)
+        val_do = parm_do[0][0].detach().cpu().numpy()
+
+        # collect all the output
+        var_cls = (reject_var, accept_var)
+        warm_up = (warm_grad, warm_score, warm_do)
+        caus_val = (val_grad, val_score, val_do)
+        return prog_fns_dict, var_cls, warm_up, caus_val
 
     def evaluate_(self,
                   program: str,
@@ -567,31 +558,32 @@ class Interpreter:
                                                 self.settings.val_size)
 
         prog_fns_dict = dict()
-        val_grads, val_scores = list(), list()
+        val_grads, val_scores, val_dos = list(), list(), list()
+        warm_grads, warm_scores, warm_dos = list(), list(), list()
         jacads, fwers = list(), list()
         for _ in range(self.data_dict['repeat']):
-            evaluations_np = np.ones((1, 1))
             if unknown_fns_def is not None and \
                unknown_fns_def.__len__() > 0:
                 if not dbg_learn_parameters:
                     prog_fns_dict, _ = self._create_fns(unknown_fns_def)
                 else:
-                    prog_fns_dict, variables, warm_up = self.learn_neural_network(program,
-                                                                                  unknown_fns_def,
-                                                                                  data_loader_trn,
-                                                                                  data_loader_val,
-                                                                                  data_loader_tst)
-                    reject_var, accept_var = variables
-                    warm_grad, warm_score = warm_up
+                    prog_fns_dict, var_cls, warm_up, caus_val = self.learn_neural_network(program,
+                                                                                          unknown_fns_def,
+                                                                                          data_loader_trn,
+                                                                                          data_loader_val,
+                                                                                          data_loader_tst)
+                    reject_var, accept_var = var_cls
+                    warm_grad, warm_score, warm_do = warm_up
+                    val_grad, val_score, val_do = caus_val
 
-            _, val_grad, val_score = self._get_accuracy(data_loader_val,
-                                                        program,
-                                                        prog_fns_dict,
-                                                        compute_grad=True)
+            val_grads.append(val_grad.tolist())
+            val_scores.append(val_score)
+            val_dos.append(val_do.tolist())
+            warm_grads.append(warm_grad.tolist())
+            warm_scores.append(warm_score)
+            warm_dos.append(warm_do.tolist())
 
             if self.output_type == ProgramOutputType.HAZARD:
-                val_grads.append(val_grad)
-                val_scores.append(val_score)
                 num_cfd = 0
                 reject_var = set(tuple(var) for var in reject_var)
                 accept_var = set(tuple(var) for var in accept_var)
@@ -615,22 +607,41 @@ class Interpreter:
             jacads.append(jacad)
             fwers.append(fwer)
 
-        self.data_dict['jacads'] = jacads
-        self.data_dict['fwers'] = fwers
+        json_out = {'val_grads': val_grads,
+                    'val_dos': val_dos,
+                    'warm_grads': warm_grads,
+                    'warm_dos': warm_dos,
+                    'jacads': jacads,
+                    'fwers': fwers}
+
         if self.output_type == ProgramOutputType.HAZARD:
-            val_grads = np.asarray(val_grads)
-            val_scores = list(zip(*val_scores))
             cox_index = list(self.data_dict['clinical_meta']['causal'].keys())
             cox_dir = self.data_dict['results_dir']
-            # print(cox_index, cox_grads.shape)
-            cox_utils = MetricUtils.coxsum(cox_index, val_grads)
-            cox_utils.vis_plot(val_scores,
+
+            warm_grads = np.asarray(warm_grads)
+            warm_scores = list(zip(*warm_scores))
+            warm_utils = MetricUtils.coxsum(cox_index,
+                                            warm_grads,
+                                            file_nm='portec_warm_up')
+            warm_utils.vis_plot(warm_scores,
+                                pathlib.Path(cox_dir),
+                                self.data_dict['metric_scores'])
+            print(warm_utils.summary(pathlib.Path(cox_dir)))
+
+            val_grads = np.asarray(val_grads)
+            val_scores = list(zip(*val_scores))
+            val_utils = MetricUtils.coxsum(cox_index, val_grads)
+            val_utils.vis_plot(val_scores,
                                pathlib.Path(cox_dir),
                                self.data_dict['metric_scores'])
-            print(cox_utils.summary(pathlib.Path(cox_dir)))
+            print(val_utils.summary(pathlib.Path(cox_dir)))
 
+            json_out['warm_scores'] = warm_scores
+            json_out['val_scores'] = val_scores
+            
+        self.data_dict['json_out'] = json_out
         return {'accuracy': 0., 'prog_fns_dict': prog_fns_dict,
-                'test_accuracy': 0., 'evaluations_np': evaluations_np}
+                'test_accuracy': 0., 'evaluations_np': np.ones((1, 1))}
 
     def evaluate(self,
                  program,

@@ -298,13 +298,12 @@ if __name__ == '__main__':
     # python -m HOUDINI.Run.LGANM --repeat 1 --exp fin
     args = parse_args()
 
-    settings = {'results_dir': str(args.lganm_dir / 'Results'),
+    settings = {'results_dir': str(args.lganm_dir / 'Results' / args.exp / 'cfd_{}'.format(args.confounder)),
                 # If False, the interpreter doesn't learn the new parameters
                 'dbg_learn_parameters': True,
                 # enumerative, evolutionary
                 'synthesizer': args.synthesizer,
                 'seq_string': 'idef'}
-    settings['results_dir'] += args.exp
     pathlib.Path(settings['results_dir']).mkdir(
         parents=True, exist_ok=True)
 
@@ -314,11 +313,13 @@ if __name__ == '__main__':
     prefixes = ['{}{}'.format(prefix, additional_prefix)
                 for prefix in seq_info_dict['prefixes']]
 
+    json_out = dict()
     jacads, fwers, errors = list(), list(), list()
     pkl_dir = args.lganm_dir / args.exp / 'n_1000'
     for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
         if pkl_id > 400:
             continue
+    # ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']:
     # for pkl_id in ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']:
     #     pkl_file = args.lganm_dir / args.exp / \
     #         'n_1000' / '{}.pickle'.format(pkl_id)
@@ -360,9 +361,10 @@ if __name__ == '__main__':
                      prefixes[sequence_idx],
                      settings['synthesizer'],
                      lganm_dict['confounder'])
-                jacads.extend(lganm_dict['jacads'])
-                fwers.extend(lganm_dict['fwers'])
-                if np.all(np.asarray(lganm_dict['fwers']) == 1.):
+                jacads.extend(lganm_dict['json_out']['jacads'])
+                fwers.extend(lganm_dict['json_out']['fwers'])
+                json_out[pkl_file.stem] = lganm_dict['json_out']
+                if np.all(np.asarray(lganm_dict['json_out']['jacads']) == 1.):
                     errors.append(pkl_file.stem)
                 print('Jaccard Similarity (JS): {}.'.format(
                     sum(jacads) / len(jacads)))
@@ -370,7 +372,16 @@ if __name__ == '__main__':
                     sum(fwers) / len(fwers)))
     jacads = np.asarray(jacads)
     fwers = np.asarray(fwers)
+    json_out['jacads_mean'] = np.mean(jacads)
+    json_out['jacads_std'] = np.std(jacads)
+    json_out['fwers_mean'] = np.mean(fwers)
+    json_out['fwers_std'] = np.std(fwers)
+    json_out['errors'] = errors
     print('\nJaccard Similarity (JS) mean: {}, std: {}.'.format(
         np.mean(jacads), np.std(jacads)))
     print('Family-wise error rate (FWER) mean: {}, std: {}.'.format(
         np.mean(fwers), np.std(fwers)))
+
+    json_file = pathlib.Path(settings['results_dir']) / 'lganm_table.json'
+    with open(str(json_file), 'w', encoding='utf-8') as f:
+        json.dump(json_out, f, ensure_ascii=False, indent=4)
