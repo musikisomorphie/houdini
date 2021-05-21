@@ -452,6 +452,8 @@ class Interpreter:
                                                       prog_fns_dict,
                                                       compute_grad=True)
         warm_do = parm_do[0][0].detach().cpu().numpy()
+        print(warm_do)
+        print(nn.Softmax(dim=0)(parm_do[0][0].detach()))
         print('Warm-up phase finished. \n')
 
         ###################################################################

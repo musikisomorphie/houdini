@@ -240,7 +240,7 @@ def parse_args():
                         metavar='DIR')
     parser.add_argument('--confounder',
                         type=str,
-                        choices=['immu', 'mole', 'path'],
+                        choices=['immu', 'mole', 'path', 'immu_cd8', 'immu_cd103'],
                         default='immu',
                         help='the experiments with confounders. (default: %(default)s)')
     parser.add_argument('--dt-file',

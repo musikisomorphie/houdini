@@ -103,6 +103,20 @@ def get_portec_io_examples(portec_file: pathlib.Path,
     max_len = 0
     for i in range(2):
         df_ptc = df.loc[df['PortecStudy'] == i + 1]
+        df_ptc.loc[df['PortecStudy'] == i + 1, 'PortecStudy'] = i
+        # print(df_ptc.columns)
+        if 'log2_av_tot_cd8t' in df_ptc.columns:
+            df_ptc.loc[df['log2_av_tot_cd8t'] <= 5, 'log2_av_tot_cd8t'] = 0
+            df_ptc.loc[df['log2_av_tot_cd8t'] > 5, 'log2_av_tot_cd8t'] = 1
+            print(np.mean(df_ptc['log2_av_tot_cd8t']),
+                  np.median(df_ptc['log2_av_tot_cd8t']),
+                  np.std(df_ptc['log2_av_tot_cd8t']))
+        if 'log2_av_tot_cd103t' in df_ptc.columns:
+            df_ptc.loc[df['log2_av_tot_cd103t'] <= 6, 'log2_av_tot_cd103t'] = 0
+            df_ptc.loc[df['log2_av_tot_cd103t'] > 6, 'log2_av_tot_cd103t'] = 1
+            print(np.mean(df_ptc['log2_av_tot_cd103t']),
+                  np.median(df_ptc['log2_av_tot_cd103t']),
+                  np.std(df_ptc['log2_av_tot_cd103t']))
         df_ptc = np.concatenate((df_ptc[causal].values,
                                  df_ptc[outcome].values), axis=-1)
         portec.append(df_ptc)

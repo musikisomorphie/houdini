@@ -319,10 +319,9 @@ if __name__ == '__main__':
     for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
         if pkl_id > 400:
             continue
-    # ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']:
-    # for pkl_id in ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']:
-    #     pkl_file = args.lganm_dir / args.exp / \
-    #         'n_1000' / '{}.pickle'.format(pkl_id)
+    for pkl_id in ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']:
+        pkl_file = args.lganm_dir / args.exp / \
+            'n_1000' / '{}.pickle'.format(pkl_id)
         with open(str(pkl_file), 'rb') as pl:
             lganm_dict = pickle.load(pl)
             if len(lganm_dict['truth']) - args.confounder == 0:
