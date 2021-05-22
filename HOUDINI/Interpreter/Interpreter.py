@@ -404,9 +404,11 @@ class Interpreter:
         ########################Warm-Up Training###########################
         ###################################################################
         sota_acc = sys.float_info.max
+        sota_wss = sys.float_info.max
         sota_mse = None
         sota_grad = None
         sota_fns_dict = dict()
+
         for epoch in range(self.settings.warm_up):
             print('Starting warm-up epoch {}'.format(epoch))
             self._set_weights_mode(prog_fns_dict, is_trn=True)
@@ -420,7 +422,8 @@ class Interpreter:
                                                               program,
                                                               prog_fns_dict,
                                                               compute_grad=True)
-            if np.mean(val_mse) < sota_acc:
+            wass_dis = self._wass1(val_mse)
+            if wass_dis < sota_wss:  # np.mean(val_mse) < sota_acc:
                 sota_tuple = self._update_sota(sota_acc,
                                                sota_grad,
                                                sota_fns_dict,
@@ -429,6 +432,12 @@ class Interpreter:
                                                val_grad,
                                                parm_do[0][0].detach())
                 sota_acc, sota_mse, sota_grad, sota_fns_dict = sota_tuple
+                sota_wss = wass_dis
+                warm_do = parm_do[0][0].detach()
+                print('warm_do: ', warm_do.cpu().numpy())
+                print('sigmoid: ', torch.sigmoid(warm_do).cpu().numpy())
+                print('softmax: ', nn.Softmax(dim=0)(warm_do).cpu().numpy())
+                print('sota_acc: {}, sota_wass: {}'.format(sota_acc, sota_wss))
 
         if self.output_type == ProgramOutputType.HAZARD:
             grad_grp = list()
@@ -451,10 +460,12 @@ class Interpreter:
                                                       program,
                                                       prog_fns_dict,
                                                       compute_grad=True)
-        warm_do = parm_do[0][0].detach().cpu().numpy()
-        print(warm_do)
-        print(nn.Softmax(dim=0)(parm_do[0][0].detach()))
-        print('Warm-up phase finished. \n')
+        warm_do = parm_do[0][0].detach()
+        print('warm_do: ', warm_do.cpu().numpy())
+        print('sigmoid: ', torch.sigmoid(warm_do).cpu().numpy())
+        print('softmax: ', nn.Softmax(dim=0)(warm_do).cpu().numpy())
+        print('sota_acc: {}, sota_wass: {}'.format(sota_acc, sota_wss))
+        print('Warm-up phase compeleted. \n')
 
         ###################################################################
         ########################Causal Training############################
@@ -463,16 +474,17 @@ class Interpreter:
         sota_idx = None
         is_penalize_var = True
         while len(accept_var) + len(reject_var) < self.settings.var_num:
-            print('Starting causl training epoch.')
+            print('Starting causal training epoch.')
+            print(parm_do[1].detach())
             # obtain the variable index
             if is_penalize_var:
                 with torch.no_grad():
                     for idx in sota_ord_idx:
                         if not ((idx in accept_var) or (idx in reject_var)):
                             sota_idx = idx
-                            prob = parm_do[0].detach().clone()
-                            prob[0, sota_idx] -= self.settings.lambda_cau
-                            parm_do[0].copy_(prob)
+                            msk = parm_do[1].detach().clone()
+                            msk[0, sota_idx] = 0
+                            parm_do[1].copy_(msk)
                             break
 
             self._set_weights_mode(prog_fns_dict, is_trn=True)
@@ -527,6 +539,8 @@ class Interpreter:
                                                     prog_fns_dict,
                                                     compute_grad=True)
         val_do = parm_do[0][0].detach().cpu().numpy()
+        print(parm_do[1][0].detach())
+        print('Causal phase compeleted. \n')
 
         # collect all the output
         var_cls = (reject_var, accept_var)
@@ -640,7 +654,7 @@ class Interpreter:
 
             json_out['warm_scores'] = warm_scores
             json_out['val_scores'] = val_scores
-            
+
         self.data_dict['json_out'] = json_out
         return {'accuracy': 0., 'prog_fns_dict': prog_fns_dict,
                 'test_accuracy': 0., 'evaluations_np': np.ones((1, 1))}
@@ -709,3 +723,13 @@ class Interpreter:
             else:
                 raise NotImplementedError()
         return unk_fns_interpreter_def_list
+
+    def _wass1(self, res):
+        wass_dis = list()
+        for env in range(self.data_dict['env_num']):
+            res_env = res.pop(env)
+            wdist = (np.mean(res_env) - np.mean(res)) ** 2 + \
+                (np.std(res_env) - np.std(res)) ** 2
+            wass_dis.append(np.sqrt(wdist))
+            res.insert(env, res_env)
+        return max(wass_dis)

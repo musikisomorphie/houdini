@@ -191,13 +191,15 @@ class NetDO(SaveableNNModule):
 
         self.cau_wei = nn.Parameter(data=torch.zeros(
             1, input_dim), requires_grad=True)
+        self.cau_msk = nn.Parameter(data=torch.ones(
+            1, input_dim), requires_grad=False)
 
     def forward(self, x):
         if type(x) == tuple:
             x = x[0]
 
         xprob = torch.sigmoid(self.cau_wei)
-        out = xprob * x
+        out = self.cau_msk * xprob * x
 
         return out, xprob.detach().cpu().numpy()
 
