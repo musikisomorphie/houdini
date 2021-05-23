@@ -317,9 +317,14 @@ if __name__ == '__main__':
     jacads, fwers, errors = list(), list(), list()
     pkl_dir = args.lganm_dir / args.exp / 'n_1000'
     for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
-        if pkl_id > 400:
+        if pkl_id > 600:
             continue
-    for pkl_id in ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']:
+    # fin: ['1799', '1481', '390', '1589', '1408', '1840', '993', '84', '1071', '196', '1795', '1793']
+    # fin: ['50', '53', '107', '192', '193', '194', '196', '197', '198', '199', '223', '300', '390']
+    # abcd: ['38', '53', '54', '71', '96', '98', '103', '185', '220', '236', '237', '238', '239', '247', '248', '298', '337']
+    # ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']
+    # for pkl_id in ['1799', '1481', '390', '1589', '1408', '1840', '993', '84', '1071', '196', '1795', '1793']:
+    # for pkl_id in ['239', '220', '248', '236', '238', '99', '224', '195', '103', '237', '155', '181']:
         pkl_file = args.lganm_dir / args.exp / \
             'n_1000' / '{}.pickle'.format(pkl_id)
         with open(str(pkl_file), 'rb') as pl:
@@ -363,12 +368,13 @@ if __name__ == '__main__':
                 jacads.extend(lganm_dict['json_out']['jacads'])
                 fwers.extend(lganm_dict['json_out']['fwers'])
                 json_out[pkl_file.stem] = lganm_dict['json_out']
-                if np.all(np.asarray(lganm_dict['json_out']['jacads']) == 1.):
+                if not np.all(np.asarray(lganm_dict['json_out']['jacads']) == 1.):
                     errors.append(pkl_file.stem)
                 print('Jaccard Similarity (JS): {}.'.format(
                     sum(jacads) / len(jacads)))
                 print('Family-wise error rate (FWER): {}'.format(
                     sum(fwers) / len(fwers)))
+                print('errors: {}'.format(errors))
     jacads = np.asarray(jacads)
     fwers = np.asarray(fwers)
     json_out['jacads_mean'] = np.mean(jacads)

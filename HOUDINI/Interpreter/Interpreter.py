@@ -386,12 +386,17 @@ class Interpreter:
 
         return mse_out, grad_out, score_out
 
-    def learn_neural_network(self,
-                             program: str,
-                             unknown_fns: List[Dict],
-                             data_loader_trn: NumpyDataSetIterator,
-                             data_loader_val: NumpyDataSetIterator,
-                             data_loader_tst: NumpyDataSetIterator) -> Tuple:
+    def _warm_up(self,
+                 program: str,
+                 unknown_fns: List[Dict],
+                 data_loader_trn: NumpyDataSetIterator,
+                 data_loader_val: NumpyDataSetIterator,
+                 data_loader_tst: NumpyDataSetIterator):
+
+        sota_acc = sys.float_info.max
+        sota_wss = sys.float_info.max
+        sota_do = None
+        sota_fns_dict = dict()
 
         prog_fns_dict, trainable_parameters = self._create_fns(unknown_fns)
         parm_all = trainable_parameters['do'] + trainable_parameters['non-do']
@@ -399,15 +404,6 @@ class Interpreter:
         optim_all = torch.optim.Adam(parm_all,
                                      lr=self.settings.learning_rate,
                                      weight_decay=0.001)
-
-        ###################################################################
-        ########################Warm-Up Training###########################
-        ###################################################################
-        sota_acc = sys.float_info.max
-        sota_wss = sys.float_info.max
-        sota_mse = None
-        sota_grad = None
-        sota_fns_dict = dict()
 
         for epoch in range(self.settings.warm_up):
             print('Starting warm-up epoch {}'.format(epoch))
@@ -418,25 +414,27 @@ class Interpreter:
                              optim_all)
 
             self._set_weights_mode(prog_fns_dict, is_trn=False)
-            val_mse, val_grad, val_score = self._get_accuracy(data_loader_val,
-                                                              program,
-                                                              prog_fns_dict,
-                                                              compute_grad=True)
+            val_mse = self._get_accuracy(data_loader_val,
+                                         program,
+                                         prog_fns_dict)[0]
+
             wass_dis = self._wass1(val_mse)
             if wass_dis < sota_wss:  # np.mean(val_mse) < sota_acc:
                 sota_tuple = self._update_sota(sota_acc,
-                                               sota_grad,
+                                               None,
                                                sota_fns_dict,
                                                prog_fns_dict,
                                                val_mse,
-                                               val_grad,
+                                               None,
                                                parm_do[0][0].detach())
-                sota_acc, sota_mse, sota_grad, sota_fns_dict = sota_tuple
+                sota_acc, _, _, sota_fns_dict = sota_tuple
                 sota_wss = wass_dis
-                warm_do = parm_do[0][0].detach()
-                print('warm_do: ', warm_do.cpu().numpy())
-                print('sigmoid: ', torch.sigmoid(warm_do).cpu().numpy())
-                print('softmax: ', nn.Softmax(dim=0)(warm_do).cpu().numpy())
+                sota_do = parm_do[0][0].detach().cpu().numpy()
+                print('warm_do: ', sota_do)
+                print('sigmoid: ', torch.sigmoid(
+                    parm_do[0][0]).detach().cpu().numpy())
+                print('softmax: ', nn.Softmax(dim=0)
+                      (parm_do[0][0]).detach().cpu().numpy())
                 print('sota_acc: {}, sota_wass: {}'.format(sota_acc, sota_wss))
 
         if self.output_type == ProgramOutputType.HAZARD:
@@ -444,28 +442,63 @@ class Interpreter:
             caus_grp = self.data_dict['clinical_meta']['causal_grp']
             # sort the causal group based on the mean gradient weight
             for cau in caus_grp:
-                grad_grp.append(np.mean(sota_grad[cau]))
+                grad_grp.append(np.mean(sota_do[cau]))
             sota_ord_idx, _ = zip(*sorted(zip(caus_grp,
                                               grad_grp),
                                           key=lambda t: t[1]))
         elif self.output_type == ProgramOutputType.MSE:
-            sota_ord_idx = np.argsort(sota_grad).tolist()
+            sota_ord_idx = np.argsort(sota_do).tolist()
+
+        # for new_fn_name, new_fn in prog_fns_dict.items():
+        #     if issubclass(type(new_fn), nn.Module):
+        #         new_fn.load_state_dict(
+        #             sota_fns_dict[new_fn_name])
+
+        # _, warm_grad, warm_score = self._get_accuracy(data_loader_val,
+        #                                               program,
+        #                                               prog_fns_dict,
+        #                                               compute_grad=True)
+
+        # warm_do = parm_do[0][0].detach()
+        # print('warm_do: ', warm_do.cpu().numpy())
+        # print('sigmoid: ', torch.sigmoid(warm_do).cpu().numpy())
+        # print('softmax: ', nn.Softmax(dim=0)(warm_do).cpu().numpy())
+        # print('sota_acc: {}, sota_wass: {}'.format(sota_acc, sota_wss))
+        print('Warm-up phase compeleted. \n')
+
+        sota = (sota_acc,
+                sota_wss,
+                sota_do,
+                sota_fns_dict,
+                sota_ord_idx)
+
+        return sota
+
+    def learn_neural_network(self,
+                             program: str,
+                             unknown_fns: List[Dict],
+                             data_loader_trn: NumpyDataSetIterator,
+                             data_loader_val: NumpyDataSetIterator,
+                             data_loader_tst: NumpyDataSetIterator) -> Tuple:
+
+        sota = self._warm_up(program,
+                             unknown_fns,
+                             data_loader_trn,
+                             data_loader_val,
+                             data_loader_tst)
+        sota_acc, sota_wss, sota_do, sota_fns_dict, sota_ord_idx = sota
+
+        prog_fns_dict, trainable_parameters = self._create_fns(unknown_fns)
+        parm_all = trainable_parameters['do'] + trainable_parameters['non-do']
+        parm_do = trainable_parameters['do']
+        optim_all = torch.optim.Adam(parm_all,
+                                     lr=self.settings.learning_rate * 0.1,
+                                     weight_decay=0.001)
 
         for new_fn_name, new_fn in prog_fns_dict.items():
             if issubclass(type(new_fn), nn.Module):
                 new_fn.load_state_dict(
                     sota_fns_dict[new_fn_name])
-
-        _, warm_grad, warm_score = self._get_accuracy(data_loader_val,
-                                                      program,
-                                                      prog_fns_dict,
-                                                      compute_grad=True)
-        warm_do = parm_do[0][0].detach()
-        print('warm_do: ', warm_do.cpu().numpy())
-        print('sigmoid: ', torch.sigmoid(warm_do).cpu().numpy())
-        print('softmax: ', nn.Softmax(dim=0)(warm_do).cpu().numpy())
-        print('sota_acc: {}, sota_wass: {}'.format(sota_acc, sota_wss))
-        print('Warm-up phase compeleted. \n')
 
         ###################################################################
         ########################Causal Training############################
@@ -500,16 +533,18 @@ class Interpreter:
 
             if np.mean(val_mse) < sota_acc:
                 sota_tuple = self._update_sota(sota_acc,
-                                               sota_grad,
+                                               None,
                                                sota_fns_dict,
                                                prog_fns_dict,
                                                val_mse)
                 sota_acc, _, _, sota_fns_dict = sota_tuple
 
-            wass_dis, cur_mean = self._wass(val_mse, sota_mse)
-            coef = self.settings.lambda_1 * \
-                (np.mean(sota_grad[sota_idx]) < self.settings.lambda_2)
-            if wass_dis > coef * sota_acc:
+            wass_dis = self._wass1(val_mse)
+            # wass_dis, cur_mean = self._wass(val_mse, sota_mse)
+            # coef = self.settings.lambda_1 * \
+            #     (np.mean(sota_grad[sota_idx]) < self.settings.lambda_2)
+            # if wass_dis > coef * sota_acc:
+            if wass_dis > 4 * (1 - sota_do[sota_idx]) * sota_wss:
                 if is_penalize_var:
                     is_penalize_var = False
                     continue
@@ -526,7 +561,7 @@ class Interpreter:
 
             print(sota_idx, sota_acc, wass_dis,
                   accept_var, reject_var)
-            print(cur_mean, sota_grad)
+            # print(cur_mean, sota_grad)
 
         self._set_weights_mode(prog_fns_dict, is_trn=True)
         self._train_data(data_loader_trn,
@@ -544,7 +579,7 @@ class Interpreter:
 
         # collect all the output
         var_cls = (reject_var, accept_var)
-        warm_up = (warm_grad, warm_score, warm_do)
+        warm_up = (val_grad, val_score, val_do)
         caus_val = (val_grad, val_score, val_do)
         return prog_fns_dict, var_cls, warm_up, caus_val
 
