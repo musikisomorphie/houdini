@@ -492,7 +492,7 @@ class Interpreter:
         parm_all = trainable_parameters['do'] + trainable_parameters['non-do']
         parm_do = trainable_parameters['do']
         optim_all = torch.optim.Adam(parm_all,
-                                     lr=self.settings.learning_rate * 0.1,
+                                     lr=self.settings.learning_rate * 0.5,
                                      weight_decay=0.001)
 
         for new_fn_name, new_fn in prog_fns_dict.items():
@@ -544,7 +544,7 @@ class Interpreter:
             # coef = self.settings.lambda_1 * \
             #     (np.mean(sota_grad[sota_idx]) < self.settings.lambda_2)
             # if wass_dis > coef * sota_acc:
-            if wass_dis > 4 * (1 - sota_do[sota_idx]) * sota_wss:
+            if wass_dis > 5 * (1 - sota_do[sota_idx]) * sota_wss:
                 if is_penalize_var:
                     is_penalize_var = False
                     continue
