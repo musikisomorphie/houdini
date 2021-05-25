@@ -86,15 +86,15 @@ def get_task_settings(data_dict: Dict,
     """
 
     if len(confounder) == 0:
-        lambda_1 = 9
+        lambda_1 = 5
         lambda_2 = 0.08
         lr = 0.02
     elif len(confounder) == 1:
-        lambda_1 = 16
+        lambda_1 = 5
         lambda_2 = 0.16
         lr = 0.02
     elif len(confounder) == 2:
-        lambda_1 = 18
+        lambda_1 = 5
         lambda_2 = 0.2
         lr = 0.03
     else:
@@ -317,7 +317,7 @@ if __name__ == '__main__':
     jacads, fwers, errors = list(), list(), list()
     pkl_dir = args.lganm_dir / args.exp / 'n_1000'
     for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
-        if pkl_id > 600:
+        if pkl_id > 1200:
             continue
     # fin: ['1799', '1481', '390', '1589', '1408', '1840', '993', '84', '1071', '196', '1795', '1793']
     # fin: ['50', '53', '107', '192', '193', '194', '196', '197', '198', '199', '223', '300', '390']
@@ -325,8 +325,8 @@ if __name__ == '__main__':
     # ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']
     # for pkl_id in ['1799', '1481', '390', '1589', '1408', '1840', '993', '84', '1071', '196', '1795', '1793']:
     # for pkl_id in ['239', '220', '248', '236', '238', '99', '224', '195', '103', '237', '155', '181']:
-        pkl_file = args.lganm_dir / args.exp / \
-            'n_1000' / '{}.pickle'.format(pkl_id)
+        # pkl_file = args.lganm_dir / args.exp / \
+        #     'n_1000' / '{}.pickle'.format(pkl_id)
         with open(str(pkl_file), 'rb') as pl:
             lganm_dict = pickle.load(pl)
             if len(lganm_dict['truth']) - args.confounder == 0:
@@ -342,8 +342,6 @@ if __name__ == '__main__':
                 *sorted(zip(lganm_dict['truth'], lganm_dict['weight']),
                         key=lambda t: t[1]))
             print(truth, weight)
-            print()
-            print()
             print('\n\n all the parents: {}, outcome: {}'.format(
                 lganm_dict['truth'], lganm_dict['target']))
             lganm_dict['confounder'] = lganm_dict['truth'][:args.confounder]

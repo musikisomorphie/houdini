@@ -398,44 +398,45 @@ class Interpreter:
         sota_do = None
         sota_fns_dict = dict()
 
-        prog_fns_dict, trainable_parameters = self._create_fns(unknown_fns)
-        parm_all = trainable_parameters['do'] + trainable_parameters['non-do']
-        parm_do = trainable_parameters['do']
-        optim_all = torch.optim.Adam(parm_all,
-                                     lr=self.settings.learning_rate,
-                                     weight_decay=0.001)
+        for _ in range(1):
+            prog_fns_dict, trainable_parameters = self._create_fns(unknown_fns)
+            parm_all = trainable_parameters['do'] + trainable_parameters['non-do']
+            parm_do = trainable_parameters['do']
+            optim_all = torch.optim.Adam(parm_all,
+                                        lr=self.settings.learning_rate,
+                                        weight_decay=0.001)
 
-        for epoch in range(self.settings.warm_up):
-            print('Starting warm-up epoch {}'.format(epoch))
-            self._set_weights_mode(prog_fns_dict, is_trn=True)
-            self._train_data(data_loader_trn,
-                             program,
-                             prog_fns_dict,
-                             optim_all)
+            for epoch in range(self.settings.warm_up):
+                print('Starting warm-up epoch {}'.format(epoch))
+                self._set_weights_mode(prog_fns_dict, is_trn=True)
+                self._train_data(data_loader_trn,
+                                program,
+                                prog_fns_dict,
+                                optim_all)
 
-            self._set_weights_mode(prog_fns_dict, is_trn=False)
-            val_mse = self._get_accuracy(data_loader_val,
-                                         program,
-                                         prog_fns_dict)[0]
+                self._set_weights_mode(prog_fns_dict, is_trn=False)
+                val_mse = self._get_accuracy(data_loader_val,
+                                            program,
+                                            prog_fns_dict)[0]
 
-            wass_dis = self._wass1(val_mse)
-            if wass_dis < sota_wss:  # np.mean(val_mse) < sota_acc:
-                sota_tuple = self._update_sota(sota_acc,
-                                               None,
-                                               sota_fns_dict,
-                                               prog_fns_dict,
-                                               val_mse,
-                                               None,
-                                               parm_do[0][0].detach())
-                sota_acc, _, _, sota_fns_dict = sota_tuple
-                sota_wss = wass_dis
-                sota_do = parm_do[0][0].detach().cpu().numpy()
-                print('warm_do: ', sota_do)
-                print('sigmoid: ', torch.sigmoid(
-                    parm_do[0][0]).detach().cpu().numpy())
-                print('softmax: ', nn.Softmax(dim=0)
-                      (parm_do[0][0]).detach().cpu().numpy())
-                print('sota_acc: {}, sota_wass: {}'.format(sota_acc, sota_wss))
+                wass_dis = self._wass1(val_mse)
+                if wass_dis < sota_wss:  # np.mean(val_mse) < sota_acc:
+                    sota_tuple = self._update_sota(sota_acc,
+                                                None,
+                                                sota_fns_dict,
+                                                prog_fns_dict,
+                                                val_mse,
+                                                None,
+                                                parm_do[0][0].detach())
+                    sota_acc, _, _, sota_fns_dict = sota_tuple
+                    sota_wss = wass_dis
+                    sota_do = parm_do[0][0].detach().cpu().numpy()
+                    print('warm_do: ', sota_do)
+                    print('sigmoid: ', torch.sigmoid(
+                        parm_do[0][0]).detach().cpu().numpy())
+                    print('softmax: ', nn.Softmax(dim=0)
+                        (parm_do[0][0]).detach().cpu().numpy())
+                    print('sota_acc: {}, sota_wass: {}'.format(sota_acc, sota_wss))
 
         if self.output_type == ProgramOutputType.HAZARD:
             grad_grp = list()
@@ -449,21 +450,6 @@ class Interpreter:
         elif self.output_type == ProgramOutputType.MSE:
             sota_ord_idx = np.argsort(sota_do).tolist()
 
-        # for new_fn_name, new_fn in prog_fns_dict.items():
-        #     if issubclass(type(new_fn), nn.Module):
-        #         new_fn.load_state_dict(
-        #             sota_fns_dict[new_fn_name])
-
-        # _, warm_grad, warm_score = self._get_accuracy(data_loader_val,
-        #                                               program,
-        #                                               prog_fns_dict,
-        #                                               compute_grad=True)
-
-        # warm_do = parm_do[0][0].detach()
-        # print('warm_do: ', warm_do.cpu().numpy())
-        # print('sigmoid: ', torch.sigmoid(warm_do).cpu().numpy())
-        # print('softmax: ', nn.Softmax(dim=0)(warm_do).cpu().numpy())
-        # print('sota_acc: {}, sota_wass: {}'.format(sota_acc, sota_wss))
         print('Warm-up phase compeleted. \n')
 
         sota = (sota_acc,
@@ -505,63 +491,53 @@ class Interpreter:
         ###################################################################
         reject_var, accept_var = list(), list()
         sota_idx = None
-        is_penalize_var = True
-        while len(accept_var) + len(reject_var) < self.settings.var_num:
-            print('Starting causal training epoch.')
-            print(parm_do[1].detach())
-            # obtain the variable index
-            if is_penalize_var:
-                with torch.no_grad():
-                    for idx in sota_ord_idx:
-                        if not ((idx in accept_var) or (idx in reject_var)):
-                            sota_idx = idx
-                            msk = parm_do[1].detach().clone()
-                            msk[0, sota_idx] = 0
-                            parm_do[1].copy_(msk)
-                            break
+        epochs = self.settings.warm_up // 4
+        for _ in range(self.settings.var_num):
+            with torch.no_grad():
+                for idx in sota_ord_idx:
+                    if not ((idx in accept_var) or (idx in reject_var)):
+                        sota_idx = idx
+                        msk = parm_do[1].detach().clone()
+                        msk[0, sota_idx] = 0
+                        parm_do[1].copy_(msk)
+                        break
+            for epoch in range(epochs):
+                self._set_weights_mode(prog_fns_dict, is_trn=True)
+                self._train_data(data_loader_trn,
+                                 program,
+                                 prog_fns_dict,
+                                 optim_all)
 
-            self._set_weights_mode(prog_fns_dict, is_trn=True)
-            self._train_data(data_loader_trn,
-                             program,
-                             prog_fns_dict,
-                             optim_all)
+                self._set_weights_mode(prog_fns_dict, is_trn=False)
+                val_mse = self._get_accuracy(data_loader_val,
+                                             program,
+                                             prog_fns_dict)[0]
 
-            self._set_weights_mode(prog_fns_dict, is_trn=False)
-            val_mse = self._get_accuracy(data_loader_val,
-                                         program,
-                                         prog_fns_dict)[0]
+                if np.mean(val_mse) < sota_acc:
+                    sota_tuple = self._update_sota(sota_acc,
+                                                   None,
+                                                   sota_fns_dict,
+                                                   prog_fns_dict,
+                                                   val_mse)
+                    sota_acc, _, _, sota_fns_dict = sota_tuple
 
-            if np.mean(val_mse) < sota_acc:
-                sota_tuple = self._update_sota(sota_acc,
-                                               None,
-                                               sota_fns_dict,
-                                               prog_fns_dict,
-                                               val_mse)
-                sota_acc, _, _, sota_fns_dict = sota_tuple
+                wass_dis = self._wass1(val_mse)
+                if wass_dis < self.settings.lambda_1 * (1 - sota_do[sota_idx]) * sota_wss:
+                    reject_var.append(sota_idx)
+                    self._clone_weights_state(prog_fns_dict,
+                                              sota_fns_dict)
+                    print(sota_idx, sota_acc, wass_dis,
+                          accept_var, reject_var)
+                    break
 
-            wass_dis = self._wass1(val_mse)
-            # wass_dis, cur_mean = self._wass(val_mse, sota_mse)
-            # coef = self.settings.lambda_1 * \
-            #     (np.mean(sota_grad[sota_idx]) < self.settings.lambda_2)
-            # if wass_dis > coef * sota_acc:
-            if wass_dis > 5 * (1 - sota_do[sota_idx]) * sota_wss:
-                if is_penalize_var:
-                    is_penalize_var = False
-                    continue
-                accept_var.append(sota_idx)
-                for new_fn_name, new_fn in prog_fns_dict.items():
-                    if issubclass(type(new_fn), nn.Module):
-                        new_fn.load_state_dict(
-                            sota_fns_dict[new_fn_name])
-            else:
-                reject_var.append(sota_idx)
-                self._clone_weights_state(prog_fns_dict,
-                                          sota_fns_dict)
-            is_penalize_var = True
-
-            print(sota_idx, sota_acc, wass_dis,
-                  accept_var, reject_var)
-            # print(cur_mean, sota_grad)
+                if epoch + 1 == epochs:
+                    accept_var.append(sota_idx)
+                    for new_fn_name, new_fn in prog_fns_dict.items():
+                        if issubclass(type(new_fn), nn.Module):
+                            new_fn.load_state_dict(
+                                sota_fns_dict[new_fn_name])
+                    print(sota_idx, sota_acc, wass_dis,
+                          accept_var, reject_var)
 
         self._set_weights_mode(prog_fns_dict, is_trn=True)
         self._train_data(data_loader_trn,
