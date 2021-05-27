@@ -135,6 +135,76 @@ def get_portec_io_examples(portec_file: pathlib.Path,
     return df_trn, df_val, df_tst
 
 
+def get_portec_io_examples1(portec_file: pathlib.Path,
+                            causal: List[str],
+                            outcome: str,
+                            fltr: str = None,
+                            trn: int = 0) -> Tuple[Tuple, Tuple, Tuple]:
+    """Obtain the portec data 
+
+    Args:
+        portec_file: the *.sav file storing portec data
+        causal: the candidate causal variables
+        outcome: the outcome data, RFSstatus and RFSyears
+        flter: the filter condition that excludes patient data 
+
+    Returns:
+        the train, val, test portec data 
+    """
+
+    df, _ = pyreadstat.read_sav(str(portec_file))
+    if fltr is None:
+        df = df.fillna(0)
+    else:
+        # df = df.loc[df[fltr] == 1]
+        df = df.dropna(subset=causal)
+        df = df.dropna(subset=outcome)
+
+    for study in range(2):
+        df_ptc = df.loc[df['PortecStudy'] == study + 1]
+        df_ptc.loc[df['PortecStudy'] == study + 1, 'PortecStudy'] = study
+        portec = list()
+        df_input, df_lab = list(), list()
+        max_len = 0
+        for _ in range(2):
+            # print(df_ptc.columns)
+            if 'log2_av_tot_cd8t' in df_ptc.columns:
+                df_ptc.loc[df['log2_av_tot_cd8t'] <= 5, 'log2_av_tot_cd8t'] = 0
+                df_ptc.loc[df['log2_av_tot_cd8t'] > 5, 'log2_av_tot_cd8t'] = 1
+                print(np.mean(df_ptc['log2_av_tot_cd8t']),
+                      np.median(df_ptc['log2_av_tot_cd8t']),
+                      np.std(df_ptc['log2_av_tot_cd8t']))
+            if 'log2_av_tot_cd103t' in df_ptc.columns:
+                df_ptc.loc[df['log2_av_tot_cd103t']
+                           <= 6, 'log2_av_tot_cd103t'] = 0
+                df_ptc.loc[df['log2_av_tot_cd103t']
+                           > 6, 'log2_av_tot_cd103t'] = 1
+                print(np.mean(df_ptc['log2_av_tot_cd103t']),
+                      np.median(df_ptc['log2_av_tot_cd103t']),
+                      np.std(df_ptc['log2_av_tot_cd103t']))
+            df_ptc = np.concatenate((df_ptc[causal].values,
+                                     df_ptc[outcome].values), axis=-1)
+            portec.append(df_ptc)
+            max_len = max(max_len, df_ptc.shape[0])
+
+        for ptc_id, ptc in enumerate(portec):
+            ptc = pad_array(ptc, max_len)
+            df_input.append(ptc[:, :-len(outcome)])
+            df_lab.append(ptc[:, -len(outcome):])
+            # df_lab[-1][:] = ptc_id
+
+        if trn == study:
+            df_trn = (np.stack(df_input, 1),
+                      np.stack(df_lab, 1))
+        else:
+            df_val = (np.stack(df_input, 1),
+                      np.stack(df_lab, 1))
+
+    df_tst = df_val
+    print(df_trn[0].shape, df_trn[1].shape)
+    return df_trn, df_val, df_tst
+
+
 def get_lganm_io_examples(lganm_envs: List[np.ndarray],
                           confounder: List[int],
                           #   parent: List[int],
@@ -271,18 +341,13 @@ def compute_aicp_results(path):
 
 
 def main():
-    # sav_file = Path('/home/histopath/Data/PORTEC/PORTEC12-1-2-21.sav')
+    # sav_file = pathlib.Path('/raid/jiqing/Data/PORTEC/PORTEC12-1-2-21.sav')
     # csv_file = sav_file.with_suffix('.csv')
     # sav_to_csv(sav_file, csv_file)
     # prep_sav(sav_file)
-    # pkl_path = pathlib.Path(
-    #     '/home/histopath/Model/LGANM/Results/fin/n_1000_res.pickle')
-    # res_dict = load_pickle(pkl_path)
-    # print(sum(res_dict['jacad']) / len(res_dict['jacad']))
-    # print(sum(res_dict['fwer']) / len(res_dict['fwer']))
-    # print(res_dict['error'])
-    # print(len(res_dict['jacad']))
-    aicp_path = pathlib.Path('/home/histopath/Data/LGANM/fin/n_1000.pickle')
+
+    aicp_path = pathlib.Path(
+        '/mnt/sda1/Data/LGANM_hidden_2/abcd/experiments/n_1000.pickle')
     aicp_tests = compute_aicp_results(aicp_path)
 
 

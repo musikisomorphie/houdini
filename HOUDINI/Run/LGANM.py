@@ -12,6 +12,7 @@ from enum import Enum
 # from pathlib import Path
 from typing import Callable, Optional, Dict, Tuple, Union, List
 
+from src import utils as icp_utils
 from HOUDINI.Config import config
 from HOUDINI.Run.Task import Task
 from HOUDINI.Run.Task import TaskSettings
@@ -91,12 +92,12 @@ def get_task_settings(data_dict: Dict,
         lr = 0.02
     elif len(confounder) == 1:
         lambda_1 = 5
-        lambda_2 = 0.16
+        lambda_2 = 0.08
         lr = 0.02
     elif len(confounder) == 2:
         lambda_1 = 5
-        lambda_2 = 0.2
-        lr = 0.03
+        lambda_2 = 0.08
+        lr = 0.02
     else:
         raise NotImplementedError('the coeff is not implemented '
                                   'for {} confounder(s)'.format(len(confounder)))
@@ -317,35 +318,29 @@ if __name__ == '__main__':
     jacads, fwers, errors = list(), list(), list()
     pkl_dir = args.lganm_dir / args.exp / 'n_1000'
     for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
-        if pkl_id > 1200:
-            continue
-    # fin: ['1799', '1481', '390', '1589', '1408', '1840', '993', '84', '1071', '196', '1795', '1793']
-    # fin: ['50', '53', '107', '192', '193', '194', '196', '197', '198', '199', '223', '300', '390']
-    # abcd: ['38', '53', '54', '71', '96', '98', '103', '185', '220', '236', '237', '238', '239', '247', '248', '298', '337']
-    # ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']
-    # for pkl_id in ['1799', '1481', '390', '1589', '1408', '1840', '993', '84', '1071', '196', '1795', '1793']:
-    # for pkl_id in ['239', '220', '248', '236', '238', '99', '224', '195', '103', '237', '155', '181']:
+        # if pkl_id > 100:
+        #     continue
+        # fin: ['1799', '1481', '390', '1589', '1408', '1840', '993', '84', '1071', '196', '1795', '1793']
+        # fin: ['50', '53', '107', '192', '193', '194', '196', '197', '198', '199', '223', '300', '390']
+        # abcd: ['38', '53', '54', '71', '96', '98', '103', '185', '220', '236', '237', '238', '239', '247', '248', '298', '337']
+        # ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']
+        # for pkl_id in ['1799', '1481', '390', '1589', '1408', '1840', '993', '84', '1071', '196', '1795', '1793']:
+        # for pkl_id in ['239', '220', '248', '236', '238', '99', '224', '195', '103', '237', '155', '181']:
         # pkl_file = args.lganm_dir / args.exp / \
         #     'n_1000' / '{}.pickle'.format(pkl_id)
+        # print(pkl_file.stem)
+        # cfd = list()
         with open(str(pkl_file), 'rb') as pl:
             lganm_dict = pickle.load(pl)
-            if len(lganm_dict['truth']) - args.confounder == 0:
-                print('This experiment does not have parents, thus ignore.')
-                continue
             lganm_dict['truth'] = list(lganm_dict['truth'])
-            lganm_dict['weight'] = list()
             dag_wei = lganm_dict['case'].sem.W
-            for var in lganm_dict['truth']:
-                lganm_dict['weight'].append(dag_wei[var, lganm_dict['target']])
-                print(var, lganm_dict['weight'][-1])
-            truth, weight = zip(
-                *sorted(zip(lganm_dict['truth'], lganm_dict['weight']),
-                        key=lambda t: t[1]))
-            print(truth, weight)
-            print('\n\n all the parents: {}, outcome: {}'.format(
+            assert (dag_wei.shape[1] == dag_wei.shape[0])
+            assert np.all(np.asarray(lganm_dict['truth']) < dag_wei.shape[0])
+            assert lganm_dict['target'] < dag_wei.shape[1]
+            print(dag_wei.shape)
+            print('all the parents: {}, outcome: {}'.format(
                 lganm_dict['truth'], lganm_dict['target']))
-            lganm_dict['confounder'] = lganm_dict['truth'][:args.confounder]
-            lganm_dict['truth'] = lganm_dict['truth'][args.confounder:]
+            lganm_dict['confounder'] = list()
             print('remaining parents: {}, confounder: {} \n\n'.format(
                 lganm_dict['truth'], lganm_dict['confounder']))
             lganm_parm = {'dict_name': 'lganm',
