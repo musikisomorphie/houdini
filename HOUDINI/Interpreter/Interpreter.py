@@ -522,14 +522,6 @@ class Interpreter:
                                              program,
                                              prog_fns_dict)[0]
 
-                if np.mean(val_mse) < sota_acc:
-                    sota_tuple = self._update_sota(sota_acc,
-                                                   None,
-                                                   sota_fns_dict,
-                                                   prog_fns_dict,
-                                                   val_mse)
-                    sota_acc, _, _, sota_fns_dict = sota_tuple
-
                 wass_dis = self._wass1(val_mse)
                 if wass_dis < self.settings.lambda_1 * (1 - np.max(sota_do[sota_idx])) * sota_wss:
                     reject_var.append(sota_idx)
