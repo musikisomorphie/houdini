@@ -94,8 +94,8 @@ class coxsum():
             df.loc[df['p'] <= 1e-16, 'p'] = 1e-16
             df['-log2(p)'] = -self._quiet_log2(df['p'])
             # 4 digits after decimal
-            df.update(df.iloc[:, ].apply(
-                lambda x: (x * 1e3).astype(int) / 1e3))
+            # df.update(df.iloc[:, ].apply(
+            #     lambda x: (x * 1e3).astype(int) / 1e3))
 
         doc = pl.Document()
         doc.packages.append(pl.Package('adjustbox'))

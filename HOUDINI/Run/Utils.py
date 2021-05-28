@@ -1,10 +1,12 @@
 import numpy as np
 import math
 import random
+import csv
 import pyreadstat
 import pickle
 import pathlib
 import itertools
+from collections import defaultdict
 from typing import List, Dict, Tuple
 from matplotlib import pyplot as plt
 from Data.DataGenerator import NumpyDataSetIterator, ListNumpyDataSetIterator
@@ -103,7 +105,7 @@ def get_portec_io_examples(portec_file: pathlib.Path,
     max_len = 0
     for i in range(2):
         df_ptc = df.loc[df['PortecStudy'] == i + 1]
-        df_ptc.loc[df['PortecStudy'] == i + 1, 'PortecStudy'] = i
+        # df_ptc.loc[df['PortecStudy'] == i + 1, 'PortecStudy'] = i
         # print(df_ptc.columns)
         if 'log2_av_tot_cd8t' in df_ptc.columns:
             df_ptc.loc[df['log2_av_tot_cd8t'] <= 5, 'log2_av_tot_cd8t'] = 0
@@ -256,11 +258,91 @@ def sav_to_csv(sav_file,
     df.to_csv(str(csv_file))
 
 
-def prep_sav(sav_file):
+def header_lookup(headers):
+    """The header lookup table. Assign the index for each candidate as follow,
+
+    var_id[patient id] = 0
+    var_id[survival rate] = 1
+
+    Args:
+        headers: the name list of candidate causal variables,
+                    outcome, patien id, etc.
+    """
+
+    var_id = dict()
+
+    for idx, head in enumerate(headers):
+        var_id[head] = idx
+
+    return var_id
+
+
+def prep_sav(portec_dir, decimal=2):
+    # obtain the dict that maps case_id to spot_id 
+    key_tab = defaultdict(list)
+    key_csv = portec_dir / 'PORTEC_key.csv'
+    with open(str(key_csv), 'r') as csvfile:
+        csv_reader = csv.reader(csvfile, delimiter=',')
+        next(csv_reader)
+        csv_id = None
+        for csv_id, val in enumerate(csv_reader):
+            # due to the excel to csv accuracy, 
+            # use decimal 2 for mapping
+            case_id = round(float(val[0]), decimal)
+            key_tab[case_id].append(str(val[2]).replace(' ', ''))
+            key_tab[case_id].append(float(val[0]))
+        # make sure no id replica after processing the case ids
+        assert len(list(key_tab.keys())) == csv_id + \
+            1, '{} {}'.format(len(list(key_tab.keys())), csv_id)
+
+    # obtain the dict that maps spot id to total of tumor and stroma area
+    path_tab = defaultdict(list)
+    path_csv = portec_dir / 'PORTEC_vk.csv'
+    with open(str(path_csv), 'r') as csvfile:
+        csv_reader = csv.reader(csvfile, delimiter=',')
+        var_id = header_lookup(next(csv_reader))
+        print(var_id)
+        for key, val in enumerate(csv_reader):
+            spot_id = str(val[var_id['Spot Id']]).replace(' ', '')
+            spot_val = val[var_id['Spot Valid']].lower() == 'true'
+            if not spot_val:
+                print('patient {} has {} spot, thus exlude'.format(
+                    spot_id,
+                    val[var_id['Spot Valid']]))
+                continue
+            
+            stroma = val[var_id['Stroma Area (mm2)']]
+            if not str(stroma).replace('.', '', 1).isdigit():
+                print('stroma', key, stroma)
+            tumor = val[var_id['Tumor Area (mm2)']]
+            if not str(tumor).replace('.', '', 1).isdigit():
+                print('tumor', key, tumor, float(tumor))
+            path_tab[spot_id].append(float(stroma) + float(tumor)) 
+
+    sav_file = portec_dir / 'PORTEC12-1-2-21.sav'
     df, meta = pyreadstat.read_sav(str(sav_file))
-    df_ind = (df.index.astype('int64') + 1).tolist()
-    random.shuffle(df_ind)
-    df['log2_id'] = np.log2(df_ind)
+    df['total_area'] = None
+    for index, row in df.iterrows():
+        case_id = round(float(row['Case_id']), decimal)
+        if case_id not in key_tab:
+            # print(index, row['log2_av_tot_cd103v'])
+            continue
+        if key_tab[case_id][0] not in path_tab:
+            # print(index, row['log2_av_tot_cd103v'])
+            continue    
+        # check if the raw case id between two tables are almost equal
+        assert np.allclose(row['Case_id'], key_tab[case_id][1])
+        total_area = path_tab[key_tab[case_id][0]]
+        assert total_area, total_area
+        df.at[index, 'total_area'] = sum(total_area)
+
+    # dummy value assign check
+    for index, row in df.iterrows():
+        case_id = round(float(row['Case_id']), decimal)
+        if case_id in key_tab and key_tab[case_id][0] in path_tab:
+            total_area = path_tab[key_tab[case_id][0]]
+            assert row['total_area'] == sum(total_area)
+
     df['POLE'] = df['TCGA_4groups']
     df.loc[df['POLE'] == 1, 'POLE'] = 1
     df.loc[df['POLE'] == 2, 'POLE'] = 0
@@ -287,10 +369,14 @@ def prep_sav(sav_file):
     df.loc[df['VBT'] == 1, 'VBT'] = 0
     df.loc[df['VBT'] == 2, 'VBT'] = 1
 
-    new_sav = sav_file.parents[0] / (sav_file.stem + '_prep.sav')
+    df_ind = (df.index.astype('int64') + 1).tolist()
+    random.shuffle(df_ind)
+    df['log2_id'] = np.log2(df_ind)
+
+    new_sav = portec_dir / 'portec_prep.sav'
     print(new_sav)
     pyreadstat.write_sav(df, str(new_sav))
-    new_csv = sav_file.parents[0] / (sav_file.stem + '_prep.csv')
+    new_csv = sav_file.parents[0] / 'portec_prep.csv'
     print(new_csv)
     df.to_csv(str(new_csv))
 
@@ -335,7 +421,7 @@ def compute_aicp_results(path):
     #         for res_id, res in enumerate(aicp_res):
     #             if res_id <= 10:
     #                 print(res.estimate)
-    #                 # break
+                    # break
 
     return aicp
 
@@ -344,11 +430,13 @@ def main():
     # sav_file = pathlib.Path('/raid/jiqing/Data/PORTEC/PORTEC12-1-2-21.sav')
     # csv_file = sav_file.with_suffix('.csv')
     # sav_to_csv(sav_file, csv_file)
-    # prep_sav(sav_file)
 
-    aicp_path = pathlib.Path(
-        '/mnt/sda1/Data/LGANM_hidden_2/abcd/experiments/n_1000.pickle')
-    aicp_tests = compute_aicp_results(aicp_path)
+    sav_file = pathlib.Path('/home/histopath/Data/PORTEC/')
+    prep_sav(sav_file)
+
+    # aicp_path = pathlib.Path(
+    #     '/mnt/sda1/Data/LGANM_hidden_2/abcd/experiments/n_1000.pickle')
+    # aicp_tests = compute_aicp_results(aicp_path)
 
 
 if __name__ == '__main__':

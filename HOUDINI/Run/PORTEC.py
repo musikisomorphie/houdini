@@ -94,7 +94,7 @@ def get_task_settings(data_dict: Dict,
         learning_rate=0.02,
         var_num=data_dict['clinical_meta']['causal_num'],
         warm_up=8,
-        lambda_1=5,
+        lambda_1=1,
         lambda_2=0.08,
         lambda_cau=10.,
         data_dict=data_dict)
@@ -240,7 +240,8 @@ def parse_args():
                         metavar='DIR')
     parser.add_argument('--confounder',
                         type=str,
-                        choices=['immu', 'mole', 'path', 'immu_cd8', 'immu_cd103'],
+                        choices=['immu', 'mole', 'path',
+                                 'immu_cd8', 'immu_cd103'],
                         default='immu',
                         help='the experiments with confounders. (default: %(default)s)')
     parser.add_argument('--dt-file',
@@ -258,7 +259,7 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    # python -m HOUDINI.Run.PORTEC --dt-file /home/histopath/Data/PORTEC/PORTEC12-1-2-21_prep.sav --dbg
+    # python -m HOUDINI.Run.PORTEC
     args = parse_args()
 
     settings = {'results_dir': str(args.portec_dir / 'Results' / args.confounder),
@@ -278,7 +279,7 @@ if __name__ == '__main__':
     mid_size = len(portec_dict['clinical_meta']['causal'].keys()) + \
         len(portec_dict['clinical_meta']['outcome'])
     portec_parm = {'dict_name': 'portec',
-                   'file': args.portec_dir / 'PORTEC12-1-2-21_prep.sav',
+                   'file': args.portec_dir / 'portec_prep.sav',
                    'repeat': args.repeat,
                    'mid_size': mid_size,
                    'out_type': 'hazard',
@@ -298,14 +299,21 @@ if __name__ == '__main__':
 
     jacads = np.asarray(portec_dict['json_out']['jacads'])
     fwers = np.asarray(portec_dict['json_out']['fwers'])
+    warm_dos = np.asarray(portec_dict['json_out']['warm_dos'])
+    caus_dos = np.asarray(portec_dict['json_out']['val_dos'])
     portec_dict['json_out']['jacads_mean'] = np.mean(jacads)
     portec_dict['json_out']['jacads_std'] = np.std(jacads)
     portec_dict['json_out']['fwers_mean'] = np.mean(fwers)
     portec_dict['json_out']['fwers_std'] = np.std(fwers)
+    portec_dict['json_out']['warm_prob'] = np.mean(warm_dos, axis=0).tolist()
+    portec_dict['json_out']['caus_prob'] = np.mean(caus_dos, axis=0).tolist()
+
     print('\nJaccard Similarity (JS) mean: {}, std: {}.'.format(
         np.mean(jacads), np.std(jacads)))
     print('Family-wise error rate (FWER) mean: {}, std: {}.'.format(
         np.mean(fwers), np.std(fwers)))
+    print('warm probability: {}'.format(np.mean(warm_dos, axis=0)))
+    print('caus probability: {}'.format(np.mean(caus_dos, axis=0)))
 
     json_file = portec_dict['results_dir'] / 'portec_table.json'
     with open(str(json_file), 'w', encoding='utf-8') as f:

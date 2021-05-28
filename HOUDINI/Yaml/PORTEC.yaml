@@ -76,7 +76,7 @@ path:
             Grade_2Cat: 0
             LVSI_2Cat: 0
             log2_id: 0
-            PortecStudy: 0
+            total_area: 0
             # EBRT: 0
             # VBT: 0
         causal_num: 5
@@ -103,7 +103,7 @@ mole:
             MMRd: 0
             p53_mutant: 0
             log2_id: 0
-            PortecStudy: 0
+            total_area: 0
             # EBRT: 0
             # VBT: 0
         causal_num: 7
@@ -131,7 +131,7 @@ immu_cd8:
             p53_mutant: 0
             log2_av_tot_cd8t: 0
             log2_id: 0
-            PortecStudy: 0
+            total_area: 0
             # EBRT: 0
             # VBT: 0
         causal_num: 8
@@ -159,7 +159,7 @@ immu_cd103:
             p53_mutant: 0
             log2_av_tot_cd103t: 0
             log2_id: 0
-            PortecStudy: 0
+            total_area: 0
             # EBRT: 0
             # VBT: 0
         causal_num: 8
@@ -188,7 +188,7 @@ immu:
             log2_av_tot_cd8t: 0
             log2_av_tot_cd103t: 0
             log2_id: 0
-            PortecStudy: 0
+            total_area: 0
             # EBRT: 0
             # VBT: 0
         causal_num: 9
