@@ -1,76 +1,51 @@
-# # the PORTEC data parameters
-# ImmuneOrg:
-#     clinical_meta:
-#         filter:
-#             Included_CIR2020: 1
-#         # exlcude causal variables that are not numerical
-#         causal:
-#             MyometrialInvasion: 0
-#             Grade_2Cat: 0
-#             LVSI_2Cat: 0
-#             L1CAM_2var: 0
-#             log2_av_tot_cd8t: -3.321928095
-#             log2_av_tot_cd103t: -3.321928095
-#             log2_av_dblt: -3.321928095
-#             # - Age
-#             # - ReceivedTx
-#             # - HistoEndometrioid
-#             # - FIGOstage2009
-#             # - Grade 
-#             # - MyometrialInvasion
-#             # - LVSI
-#             # - L1CAM_2var
-#             # - CTNNB1
-#             # - TCGA_4groups
-#             # - log2_av_tot_cd103v
-#             # - log2_av_tot_cd8v
-#             # - log2_av_sgl_cd103v
-#             # - log2_av_sgl_cd8v
-#             # - log2_av_dblv
-#             # - log2_av_tot_cd103s
-#             # - log2_av_tot_cd8s
-#             # - log2_av_sgl_cd103s
-#             # - log2_av_sgl_cd8s
-#             # - log2_av_dbls
-#             # - log2_av_tot_cd103t
-#             # - log2_av_tot_cd8t
-#             # - log2_av_sgl_cd103t
-#             # - log2_av_sgl_cd8t
-#             # - log2_av_dblt
-#             # - Cluster
-#         outcome:
-#             - RFSstatus
-#             - RFSYears
-#     halo_output:
-#         halo_files:
-#             tma:
-#                 - ImageActualTif  # raw input tma image
-#                 - ClassifierActual  # tma image with gt masks
-#                 - annotations  # xml file recording mask coord
-#                 - object_results  # bboxing file
-#             slide:
-#                 - summary_results # the summary files for a tma slide
-#         cell: 
-#             Inflammation: [1, [0, 0, 255]] # blue, 16711680
-#             Epithelium: [2, [255, 0, 0]] # red, 255
-#             Miscellaneous: [3, [255, 0, 255]] # magenta, 16711935
-#             Stroma: [4, [0, 128, 0]] # dark green, 32768
-#             Mucin: [5, [0, 255, 255]] # cyan, 16776960 
-#     learn_parm:
-#         batch:
-#             train: 32
-#             val: 8
-#             test: 8 
-#         wei_thres: 0.5
-#     metric_scores:
-#         - Concord_Index
-#         - Brier_Score
-#         - Binomial_Log-Likelihood
+path_sanity1:
+    clinical_meta:
+        filter: [PortecStudy, 1]
+        causal:
+            MyometrialInvasion: 0
+            Grade_2Cat: 0
+            LVSI_2Cat: 0
+            # log2_id: 0
+            # total_area: 0
+            EBRT: 0
+            # VBT: 0
+        causal_num: 5
+        causal_grp: [[0], [1], [2], [3]]
+        outcome:
+            - RFSstatus
+            - RFSYears
+    metric_scores:
+        - Concord_Index
+        - Brier_Score
+        - Binomial_Log-Likelihood
+    truth: [[0], [1], [2], [3]] # align with lganm, assumed the gt causal variables
+
+path_sanity2:
+    clinical_meta:
+        filter: [PortecStudy, 2]
+        causal:
+            MyometrialInvasion: 0
+            Grade_2Cat: 0
+            LVSI_2Cat: 0
+            # log2_id: 0
+            # total_area: 0
+            EBRT: 0
+            # VBT: 0
+        causal_num: 5
+        causal_grp: [[0], [1], [2], [3]]
+        outcome:
+            - RFSstatus
+            - RFSYears
+    metric_scores:
+        - Concord_Index
+        - Brier_Score
+        - Binomial_Log-Likelihood
+    truth: [[0], [1], [2]] # align with lganm, assumed the gt causal variables
+
 
 path:
     clinical_meta:
-        filter:
-            Included_CIR2020: 1
+        filter: [Included_CIR2020, 1]
         causal:
             MyometrialInvasion: 0
             Grade_2Cat: 0
@@ -92,8 +67,7 @@ path:
 
 mole:
     clinical_meta:
-        filter:
-            Included_CIR2020: 1
+        filter: [Included_CIR2020, 1]
         causal:
             MyometrialInvasion: 0
             Grade_2Cat: 0
@@ -119,8 +93,7 @@ mole:
 
 immu_cd8:
     clinical_meta:
-        filter:
-            Included_CIR2020: 1
+        filter: [Included_CIR2020, 1]
         causal:           
             MyometrialInvasion: 0
             Grade_2Cat: 0
@@ -147,8 +120,7 @@ immu_cd8:
 
 immu_cd103:
     clinical_meta:
-        filter:
-            Included_CIR2020: 1
+        filter: [Included_CIR2020, 1]
         causal:           
             MyometrialInvasion: 0
             Grade_2Cat: 0
@@ -175,8 +147,7 @@ immu_cd103:
 
 immu:
     clinical_meta:
-        filter:
-            Included_CIR2020: 1
+        filter: [Included_CIR2020, 1]
         causal:           
             MyometrialInvasion: 0
             Grade_2Cat: 0

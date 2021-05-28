@@ -86,22 +86,6 @@ def get_task_settings(data_dict: Dict,
         the Tasksettings namedtuple
     """
 
-    if len(confounder) == 0:
-        lambda_1 = 5
-        lambda_2 = 0.08
-        lr = 0.02
-    elif len(confounder) == 1:
-        lambda_1 = 5
-        lambda_2 = 0.08
-        lr = 0.02
-    elif len(confounder) == 2:
-        lambda_1 = 5
-        lambda_2 = 0.08
-        lr = 0.02
-    else:
-        raise NotImplementedError('the coeff is not implemented '
-                                  'for {} confounder(s)'.format(len(confounder)))
-
     task_settings = TaskSettings(
         train_size=64,
         val_size=64,
@@ -318,7 +302,7 @@ if __name__ == '__main__':
     jacads, fwers, errors = list(), list(), list()
     pkl_dir = args.lganm_dir / args.exp / 'n_1000'
     for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
-        if pkl_id > 100:
+        if pkl_id > 400:
             continue
         # fin: ['1799', '1481', '390', '1589', '1408', '1840', '993', '84', '1071', '196', '1795', '1793']
         # fin: ['50', '53', '107', '192', '193', '194', '196', '197', '198', '199', '223', '300', '390']

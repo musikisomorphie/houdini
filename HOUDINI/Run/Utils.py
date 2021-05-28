@@ -7,7 +7,7 @@ import pickle
 import pathlib
 import itertools
 from collections import defaultdict
-from typing import List, Dict, Tuple
+from typing import List, Dict, Optional, Tuple
 from matplotlib import pyplot as plt
 from Data.DataGenerator import NumpyDataSetIterator, ListNumpyDataSetIterator
 
@@ -79,7 +79,7 @@ def iterate_diff_training_sizes(train_io_examples, training_data_percentages):
 def get_portec_io_examples(portec_file: pathlib.Path,
                            causal: List[str],
                            outcome: str,
-                           fltr: str = None) -> Tuple[Tuple, Tuple, Tuple]:
+                           fltr: Optional[List]) -> Tuple[Tuple, Tuple, Tuple]:
     """Obtain the portec data 
 
     Args:
@@ -96,29 +96,29 @@ def get_portec_io_examples(portec_file: pathlib.Path,
     if fltr is None:
         df = df.fillna(0)
     else:
-        df = df.loc[df[fltr] == 1]
+        df = df.loc[df[fltr[0]] == int(fltr[1])]
         df = df.dropna(subset=causal)
         df = df.dropna(subset=outcome)
 
+    # the values of the cau_var are the median of that variable,
+    # which is used to create binary lable
+    cau_var = {'total_area': None,  # median 3.46 (portec 1), 4.02844 (portec 2)
+               'log2_av_tot_cd8t': 5,
+               'log2_av_tot_cd103t': 6}
     portec = list()
     df_input, df_lab = list(), list()
     max_len = 0
     for i in range(2):
         df_ptc = df.loc[df['PortecStudy'] == i + 1]
-        # df_ptc.loc[df['PortecStudy'] == i + 1, 'PortecStudy'] = i
-        # print(df_ptc.columns)
-        if 'log2_av_tot_cd8t' in df_ptc.columns:
-            df_ptc.loc[df['log2_av_tot_cd8t'] <= 5, 'log2_av_tot_cd8t'] = 0
-            df_ptc.loc[df['log2_av_tot_cd8t'] > 5, 'log2_av_tot_cd8t'] = 1
-            print(np.mean(df_ptc['log2_av_tot_cd8t']),
-                  np.median(df_ptc['log2_av_tot_cd8t']),
-                  np.std(df_ptc['log2_av_tot_cd8t']))
-        if 'log2_av_tot_cd103t' in df_ptc.columns:
-            df_ptc.loc[df['log2_av_tot_cd103t'] <= 6, 'log2_av_tot_cd103t'] = 0
-            df_ptc.loc[df['log2_av_tot_cd103t'] > 6, 'log2_av_tot_cd103t'] = 1
-            print(np.mean(df_ptc['log2_av_tot_cd103t']),
-                  np.median(df_ptc['log2_av_tot_cd103t']),
-                  np.std(df_ptc['log2_av_tot_cd103t']))
+        for cau_name, cau_val in cau_var.items():
+            if cau_name in df_ptc.columns:
+                if cau_val is not None:
+                    df_ptc.loc[df[cau_name] <= cau_val, cau_name] = 0
+                    df_ptc.loc[df[cau_name] > cau_val, cau_name] = 1
+                print(cau_name,
+                      np.mean(df_ptc[cau_name]),
+                      np.median(df_ptc[cau_name]),
+                      np.std(df_ptc[cau_name]))
         df_ptc = np.concatenate((df_ptc[causal].values,
                                  df_ptc[outcome].values), axis=-1)
         portec.append(df_ptc)
@@ -140,8 +140,7 @@ def get_portec_io_examples(portec_file: pathlib.Path,
 def get_portec_io_examples1(portec_file: pathlib.Path,
                             causal: List[str],
                             outcome: str,
-                            fltr: str = None,
-                            trn: int = 0) -> Tuple[Tuple, Tuple, Tuple]:
+                            study: int = 1) -> Tuple[Tuple, Tuple, Tuple]:
     """Obtain the portec data 
 
     Args:
@@ -155,54 +154,37 @@ def get_portec_io_examples1(portec_file: pathlib.Path,
     """
 
     df, _ = pyreadstat.read_sav(str(portec_file))
-    if fltr is None:
-        df = df.fillna(0)
-    else:
-        # df = df.loc[df[fltr] == 1]
-        df = df.dropna(subset=causal)
-        df = df.dropna(subset=outcome)
+    df = df.dropna(subset=causal)
+    df = df.dropna(subset=outcome)
+    df = df.loc[df['PortecStudy'] == study]
+    print(len(df), study)
 
-    for study in range(2):
-        df_ptc = df.loc[df['PortecStudy'] == study + 1]
-        df_ptc.loc[df['PortecStudy'] == study + 1, 'PortecStudy'] = study
-        portec = list()
-        df_input, df_lab = list(), list()
-        max_len = 0
-        for _ in range(2):
-            # print(df_ptc.columns)
-            if 'log2_av_tot_cd8t' in df_ptc.columns:
-                df_ptc.loc[df['log2_av_tot_cd8t'] <= 5, 'log2_av_tot_cd8t'] = 0
-                df_ptc.loc[df['log2_av_tot_cd8t'] > 5, 'log2_av_tot_cd8t'] = 1
-                print(np.mean(df_ptc['log2_av_tot_cd8t']),
-                      np.median(df_ptc['log2_av_tot_cd8t']),
-                      np.std(df_ptc['log2_av_tot_cd8t']))
-            if 'log2_av_tot_cd103t' in df_ptc.columns:
-                df_ptc.loc[df['log2_av_tot_cd103t']
-                           <= 6, 'log2_av_tot_cd103t'] = 0
-                df_ptc.loc[df['log2_av_tot_cd103t']
-                           > 6, 'log2_av_tot_cd103t'] = 1
-                print(np.mean(df_ptc['log2_av_tot_cd103t']),
-                      np.median(df_ptc['log2_av_tot_cd103t']),
-                      np.std(df_ptc['log2_av_tot_cd103t']))
-            df_ptc = np.concatenate((df_ptc[causal].values,
-                                     df_ptc[outcome].values), axis=-1)
-            portec.append(df_ptc)
-            max_len = max(max_len, df_ptc.shape[0])
-
-        for ptc_id, ptc in enumerate(portec):
-            ptc = pad_array(ptc, max_len)
-            df_input.append(ptc[:, :-len(outcome)])
-            df_lab.append(ptc[:, -len(outcome):])
-            # df_lab[-1][:] = ptc_id
-
-        if trn == study:
-            df_trn = (np.stack(df_input, 1),
-                      np.stack(df_lab, 1))
+    # the values of the cau_var are the median of that variable,
+    # which is used to create binary lable
+    log2_id = 9 # median, 9.17 (portec1),9.06 (portec2) 
+    portec = list()
+    df_input, df_lab = list(), list()
+    max_len = 0
+    for i in range(2):
+        if i == 0:
+            df_ptc = df.loc[df['log2_id'] < log2_id]
         else:
-            df_val = (np.stack(df_input, 1),
-                      np.stack(df_lab, 1))
+            df_ptc = df.loc[df['log2_id'] >= log2_id]
+        df_ptc = np.concatenate((df_ptc[causal].values,
+                                 df_ptc[outcome].values), axis=-1)
+        portec.append(df_ptc)
+        max_len = max(max_len, df_ptc.shape[0])
+        print(len(df_ptc))
 
-    df_tst = df_val
+    for ptc_id, ptc in enumerate(portec):
+        ptc = pad_array(ptc, max_len)
+        df_input.append(ptc[:, :-len(outcome)])
+        df_lab.append(ptc[:, -len(outcome):])
+        # df_lab[-1][:] = ptc_id
+
+    df_trn = (np.stack(df_input, 1),
+              np.stack(df_lab, 1))
+    df_val, df_tst = df_trn, df_trn
     print(df_trn[0].shape, df_trn[1].shape)
     return df_trn, df_val, df_tst
 
@@ -278,7 +260,7 @@ def header_lookup(headers):
 
 
 def prep_sav(portec_dir, decimal=2):
-    # obtain the dict that maps case_id to spot_id 
+    # obtain the dict that maps case_id to spot_id
     key_tab = defaultdict(list)
     key_csv = portec_dir / 'PORTEC_key.csv'
     with open(str(key_csv), 'r') as csvfile:
@@ -286,7 +268,7 @@ def prep_sav(portec_dir, decimal=2):
         next(csv_reader)
         csv_id = None
         for csv_id, val in enumerate(csv_reader):
-            # due to the excel to csv accuracy, 
+            # due to the excel to csv accuracy,
             # use decimal 2 for mapping
             case_id = round(float(val[0]), decimal)
             key_tab[case_id].append(str(val[2]).replace(' ', ''))
@@ -310,14 +292,14 @@ def prep_sav(portec_dir, decimal=2):
                     spot_id,
                     val[var_id['Spot Valid']]))
                 continue
-            
+
             stroma = val[var_id['Stroma Area (mm2)']]
             if not str(stroma).replace('.', '', 1).isdigit():
                 print('stroma', key, stroma)
             tumor = val[var_id['Tumor Area (mm2)']]
             if not str(tumor).replace('.', '', 1).isdigit():
                 print('tumor', key, tumor, float(tumor))
-            path_tab[spot_id].append(float(stroma) + float(tumor)) 
+            path_tab[spot_id].append(float(stroma) + float(tumor))
 
     sav_file = portec_dir / 'PORTEC12-1-2-21.sav'
     df, meta = pyreadstat.read_sav(str(sav_file))
@@ -329,7 +311,7 @@ def prep_sav(portec_dir, decimal=2):
             continue
         if key_tab[case_id][0] not in path_tab:
             # print(index, row['log2_av_tot_cd103v'])
-            continue    
+            continue
         # check if the raw case id between two tables are almost equal
         assert np.allclose(row['Case_id'], key_tab[case_id][1])
         total_area = path_tab[key_tab[case_id][0]]
@@ -421,7 +403,7 @@ def compute_aicp_results(path):
     #         for res_id, res in enumerate(aicp_res):
     #             if res_id <= 10:
     #                 print(res.estimate)
-                    # break
+    # break
 
     return aicp
 

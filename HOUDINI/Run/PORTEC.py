@@ -12,7 +12,7 @@ from HOUDINI.Config import config
 from HOUDINI.Run.Task import Task
 from HOUDINI.Run.Task import TaskSettings
 from HOUDINI.Run.TaskSeq import TaskSeqSettings, TaskSeq
-from HOUDINI.Run.Utils import get_portec_io_examples
+from HOUDINI.Run.Utils import get_portec_io_examples, get_portec_io_examples1
 from HOUDINI.Library.OpLibrary import OpLibrary
 from HOUDINI.Library.FnLibrary import FnLibrary
 from HOUDINI.Synthesizer.AST import mkFuncSort, mkRealTensorSort, mkListSort, mkBoolTensorSort
@@ -119,7 +119,7 @@ class SurvTask(Task):
         self.file = portec_dict['file']
         self.causal = list(portec_dict['clinical_meta']['causal'].keys())
         self.outcome = portec_dict['clinical_meta']['outcome']
-        self.flter = list(portec_dict['clinical_meta']['filter'].keys())
+        self.flter = portec_dict['clinical_meta']['filter']
         input_type = mkListSort(mkRealTensorSort([1, len(self.causal)]))
         output_type = mkRealTensorSort([1, 1])
         fn_sort = mkFuncSort(input_type, output_type)
@@ -130,10 +130,16 @@ class SurvTask(Task):
                          dbg_learn_parameters)
 
     def get_io_examples(self):
-        return get_portec_io_examples(self.file,
-                                      self.causal,
-                                      self.outcome,
-                                      self.flter[0])
+        if self.flter[0] != 'PortecStudy':
+            return get_portec_io_examples(self.file,
+                                          self.causal,
+                                          self.outcome,
+                                          self.flter)
+        else:
+            return get_portec_io_examples1(self.file,
+                                           self.causal,
+                                           self.outcome,
+                                           int(self.flter[1]))
 
     def name(self):
         return 'surv_RFS'
@@ -241,7 +247,8 @@ def parse_args():
     parser.add_argument('--confounder',
                         type=str,
                         choices=['immu', 'mole', 'path',
-                                 'immu_cd8', 'immu_cd103'],
+                                 'immu_cd8', 'immu_cd103',
+                                 'path_sanity1', 'path_sanity2'],
                         default='immu',
                         help='the experiments with confounders. (default: %(default)s)')
     parser.add_argument('--dt-file',
