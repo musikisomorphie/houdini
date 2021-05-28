@@ -492,7 +492,8 @@ class Interpreter:
         self._set_weights_mode(prog_fns_dict, is_trn=False)
         _, warm_grad, warm_score = self._get_accuracy(data_loader_val,
                                                       program,
-                                                      prog_fns_dict)
+                                                      prog_fns_dict,
+                                                      compute_grad=True)
 
         ###################################################################
         ########################Causal Training############################
