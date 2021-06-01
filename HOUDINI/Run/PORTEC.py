@@ -87,7 +87,7 @@ def get_task_settings(data_dict: Dict,
         val_size=64,
         training_percentages=[100],
         N=200,
-        M=1,
+        M=10,
         K=1,
         synthesizer=synthesizer,
         dbg_learn_parameters=dbg_learn_parameters,
@@ -269,7 +269,7 @@ if __name__ == '__main__':
     # python -m HOUDINI.Run.PORTEC
     args = parse_args()
 
-    settings = {'results_dir': str(args.portec_dir / 'Results' / args.confounder),
+    settings = {'results_dir': str(args.portec_dir / 'Results' / args.confounder / 'proposed'),
                 # If False, the interpreter doesn't learn the new parameters
                 'dbg_learn_parameters': True,
                 'synthesizer': args.synthesizer,  # enumerative, evolutionary
@@ -291,7 +291,7 @@ if __name__ == '__main__':
                    'mid_size': mid_size,
                    'out_type': 'hazard',
                    'env_num': 2,
-                   'results_dir': args.portec_dir / 'Results' / args.confounder}
+                   'results_dir': args.portec_dir / 'Results' / args.confounder / 'proposed'}
     portec_dict.update(portec_parm)
     pathlib.Path(portec_dict['results_dir']).mkdir(
         parents=True, exist_ok=True)

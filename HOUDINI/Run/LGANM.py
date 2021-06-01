@@ -283,7 +283,7 @@ if __name__ == '__main__':
     # python -m HOUDINI.Run.LGANM --repeat 1 --exp fin
     args = parse_args()
 
-    settings = {'results_dir': str(args.lganm_dir / 'Results' / args.exp / 'cfd_{}'.format(args.confounder)),
+    settings = {'results_dir': str(args.lganm_dir / 'Results' / args.exp / 'proposed'),
                 # If False, the interpreter doesn't learn the new parameters
                 'dbg_learn_parameters': True,
                 # enumerative, evolutionary
@@ -302,8 +302,8 @@ if __name__ == '__main__':
     jacads, fwers, errors = list(), list(), list()
     pkl_dir = args.lganm_dir / args.exp / 'n_1000'
     for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
-        if pkl_id > 400:
-            continue
+        # if pkl_id > 400:
+        #     continue
         # fin: ['1799', '1481', '390', '1589', '1408', '1840', '993', '84', '1071', '196', '1795', '1793']
         # fin: ['50', '53', '107', '192', '193', '194', '196', '197', '198', '199', '223', '300', '390']
         # abcd: ['38', '53', '54', '71', '96', '98', '103', '185', '220', '236', '237', '238', '239', '247', '248', '298', '337']
@@ -333,7 +333,7 @@ if __name__ == '__main__':
                           'out_type': 'mse',
                           'env_num': len(lganm_dict['envs'])}
             lganm_dict.update(lganm_parm)
-
+        
         for sequence_idx, sequence in enumerate(seq_info_dict['sequences']):
             for task_id in range(seq_info_dict['num_tasks']):
                 main(lganm_dict,
