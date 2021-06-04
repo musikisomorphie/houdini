@@ -248,7 +248,8 @@ def parse_args():
                         type=str,
                         choices=['immu', 'mole', 'path',
                                  'immu_cd8', 'immu_cd103',
-                                 'path_sanity1', 'path_sanity2'],
+                                 'path_sanity1', 'path_sanity2',
+                                 'path_stat', 'mole_stat', 'immu_cd8_stat'],
                         default='immu',
                         help='the experiments with confounders. (default: %(default)s)')
     parser.add_argument('--dt-file',

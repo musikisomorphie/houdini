@@ -377,7 +377,7 @@ def compute_aicp_results(path):
 
     repeat = len(aicp_results) // len(aicp_cases)
     jacads = list()
-    fwer = list()
+    fwers = list()
     is_false = 0
     for aicp_idx, aicp_res in enumerate(aicp_results):
         case_idx = aicp_idx // repeat
@@ -386,14 +386,14 @@ def compute_aicp_results(path):
         jacad = len(parents.intersection(par_aicp)) / \
             len(parents.union(par_aicp))
         jacads.append(jacad)
-        fwer.append(not par_aicp.issubset(parents))
+        fwers.append(not par_aicp.issubset(parents))
 
         if parents != par_aicp:
             is_false += 1
-
-    print(sum(jacads) / len(jacads))
-    print(sum(fwer) / len(fwer))
-    print(is_false)
+    jacads = np.asarray(jacads)
+    fwers = np.asarray(fwers)
+    print(np.mean(jacads), np.std(jacads))
+    print(np.mean(fwers), np.std(fwers))
 
     # for aicp_id, aicp_case in enumerate(aicp_cases):
     #     if aicp_id >= 10:
@@ -413,12 +413,12 @@ def main():
     # csv_file = sav_file.with_suffix('.csv')
     # sav_to_csv(sav_file, csv_file)
 
-    sav_file = pathlib.Path('/home/histopath/Data/PORTEC/')
-    prep_sav(sav_file)
+    # sav_file = pathlib.Path('/home/histopath/Data/PORTEC/')
+    # prep_sav(sav_file)
 
-    # aicp_path = pathlib.Path(
-    #     '/mnt/sda1/Data/LGANM_hidden_2/abcd/experiments/n_1000.pickle')
-    # aicp_tests = compute_aicp_results(aicp_path)
+    aicp_path = pathlib.Path(
+        '/home/histopath/Data/PORTEC/Results_Nature/abcd_0/aicp/n_1000.pickle')
+    aicp_tests = compute_aicp_results(aicp_path)
 
 
 if __name__ == '__main__':
