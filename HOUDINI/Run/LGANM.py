@@ -302,7 +302,7 @@ if __name__ == '__main__':
     jacads, fwers, errors = list(), list(), list()
     pkl_dir = args.lganm_dir / args.exp / 'n_1000'
     for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
-        if pkl_id > 20:
+        if pkl_id > 400:
             continue
         with open(str(pkl_file), 'rb') as pl:
             lganm_dict = pickle.load(pl)
