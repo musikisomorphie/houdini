@@ -120,4 +120,4 @@ Data/GTSRB
 Data/smallnorb/*.mat.gz
 
 
-.vscode/*
+HOUDINI/.vscode/*
