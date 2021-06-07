@@ -91,7 +91,7 @@ def get_task_settings(data_dict: Dict,
         val_size=64,
         training_percentages=[100],
         N=5000,
-        M=1,
+        M=4,
         K=1,
         synthesizer=synthesizer,
         dbg_learn_parameters=dbg_learn_parameters,
@@ -234,8 +234,8 @@ def main(lganm_dict: Dict,
                                       synthesizer,
                                       confounder)
 
-    lib = OpLibrary(['do', 'compose', 'map',
-                     'repeat', 'cat'])
+    lib = OpLibrary(['do', 'compose',
+                     'repeat', 'cat', 'conv'])
 
     seq_tasks_info = get_seq_from_string(seq_str)
 
@@ -302,18 +302,8 @@ if __name__ == '__main__':
     jacads, fwers, errors = list(), list(), list()
     pkl_dir = args.lganm_dir / args.exp / 'n_1000'
     for pkl_id, pkl_file in enumerate(pkl_dir.glob('*.pickle')):
-        # if pkl_id > 400:
-        #     continue
-        # fin: ['1799', '1481', '390', '1589', '1408', '1840', '993', '84', '1071', '196', '1795', '1793']
-        # fin: ['50', '53', '107', '192', '193', '194', '196', '197', '198', '199', '223', '300', '390']
-        # abcd: ['38', '53', '54', '71', '96', '98', '103', '185', '220', '236', '237', '238', '239', '247', '248', '298', '337']
-        # ['185', '239', '53', '99', '96', '55', '225', '97', '98', '285', '284', '209', '258', '52', '238', '232', '236', '248', '54', '152', '75', '237', '259', '249', '195', '108']
-        # for pkl_id in ['1799', '1481', '390', '1589', '1408', '1840', '993', '84', '1071', '196', '1795', '1793']:
-        # for pkl_id in ['239', '220', '248', '236', '238', '99', '224', '195', '103', '237', '155', '181']:
-        # pkl_file = args.lganm_dir / args.exp / \
-        #     'n_1000' / '{}.pickle'.format(pkl_id)
-        # print(pkl_file.stem)
-        # cfd = list()
+        if pkl_id > 20:
+            continue
         with open(str(pkl_file), 'rb') as pl:
             lganm_dict = pickle.load(pl)
             lganm_dict['truth'] = list(lganm_dict['truth'])
@@ -333,7 +323,7 @@ if __name__ == '__main__':
                           'out_type': 'mse',
                           'env_num': len(lganm_dict['envs'])}
             lganm_dict.update(lganm_parm)
-        
+
         for sequence_idx, sequence in enumerate(seq_info_dict['sequences']):
             for task_id in range(seq_info_dict['num_tasks']):
                 main(lganm_dict,
@@ -342,27 +332,46 @@ if __name__ == '__main__':
                      prefixes[sequence_idx],
                      settings['synthesizer'],
                      lganm_dict['confounder'])
-                jacads.extend(lganm_dict['json_out']['jacads'])
-                fwers.extend(lganm_dict['json_out']['fwers'])
-                json_out[pkl_file.stem] = lganm_dict['json_out']
-                if not np.all(np.asarray(lganm_dict['json_out']['jacads']) == 1.):
-                    errors.append(pkl_file.stem)
-                print('Jaccard Similarity (JS): {}.'.format(
-                    sum(jacads) / len(jacads)))
-                print('Family-wise error rate (FWER): {}'.format(
-                    sum(fwers) / len(fwers)))
-                print('errors: {}'.format(errors))
-    jacads = np.asarray(jacads)
-    fwers = np.asarray(fwers)
-    json_out['jacads_mean'] = np.mean(jacads)
-    json_out['jacads_std'] = np.std(jacads)
-    json_out['fwers_mean'] = np.mean(fwers)
-    json_out['fwers_std'] = np.std(fwers)
-    json_out['errors'] = errors
-    print('\nJaccard Similarity (JS) mean: {}, std: {}.'.format(
-        np.mean(jacads), np.std(jacads)))
-    print('Family-wise error rate (FWER) mean: {}, std: {}.'.format(
-        np.mean(fwers), np.std(fwers)))
+                res_dict = lganm_dict['json_out']
+                for prog_str in res_dict:
+                    if prog_str not in json_out:
+                        json_out[prog_str] = {'jacads': list(),
+                                              'fwers': list(),
+                                              'errors': list(),
+                                              'rejects': list(),
+                                              'accepts': list()}
+                    json_out[prog_str]['jacads'].extend(
+                        res_dict[prog_str]['jacads'])
+                    json_out[prog_str]['fwers'].extend(
+                        res_dict[prog_str]['fwers'])
+                    # print(json_out[prog_str]['jacads'])
+                    # json_out[prog_str]['rejects'].append(res_dict[prog_str]['rej_vars'])
+                    # json_out[prog_str]['accepts'].append(res_dict[prog_str]['acc_vars'])
+                    # jacads.extend(lganm_dict['json_out']['jacads'])
+                    # fwers.extend(lganm_dict['json_out']['fwers'])
+                    # json_out[prog_str][pkl_file.stem] = lganm_dict[prog_str]['json_out']
+                    if not np.all(np.asarray(res_dict[prog_str]['jacads']) == 1.):
+                        json_out[prog_str]['errors'].append(pkl_file.stem)
+                    # print('\nprogram: {}'.format(prog_str))
+                    # print('Jaccard Similarity (JS): {}.'.format(
+                    #     sum(json_out[prog_str]['jacads']) / len(json_out[prog_str]['jacads'])))
+                    # print('Family-wise error rate (FWER): {}'.format(
+                    #     sum(json_out[prog_str]['fwers']) / len(json_out[prog_str]['fwers'])))
+                    # print('errors: {}'.format(json_out[prog_str]['errors']))
+    for prog_str in json_out:
+        # print(jacads)
+        jacads = np.asarray(json_out[prog_str]['jacads'])
+        fwers = np.asarray(json_out[prog_str]['fwers'])
+        json_out[prog_str]['jacads_mean'] = np.mean(jacads, axis=0).tolist()
+        json_out[prog_str]['jacads_std'] = np.std(jacads, axis=0).tolist()
+        json_out[prog_str]['fwers_mean'] = np.mean(fwers, axis=0).tolist()
+        json_out[prog_str]['fwers_std'] = np.std(fwers, axis=0).tolist()
+        print(jacads.shape, fwers.shape)
+        print('\nprogram: {}'.format(prog_str))
+        print('Jaccard Similarity (JS) mean: {}, std: {}.'.format(
+            np.mean(jacads, axis=0), np.std(jacads, axis=0)))
+        print('Family-wise error rate (FWER) mean: {}, std: {}.'.format(
+            np.mean(fwers, axis=0), np.std(fwers, axis=0)))
 
     json_file = pathlib.Path(settings['results_dir']) / 'lganm_table.json'
     with open(str(json_file), 'w', encoding='utf-8') as f:

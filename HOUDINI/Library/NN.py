@@ -51,49 +51,49 @@ class SaveableNNModule(nn.Module):
             f.close()
 
 
-class NetCNN(SaveableNNModule):
-    def __init__(self, name, input_dim, input_ch):
-        """
-        :param output_activation: [None, F.softmax, torch.sigmoid]
-        """
-        super(NetCNN, self).__init__()
+# class NetCNN(SaveableNNModule):
+#     def __init__(self, name, input_dim, input_ch):
+#         """
+#         :param output_activation: [None, F.softmax, torch.sigmoid]
+#         """
+#         super(NetCNN, self).__init__()
 
-        self.name = name
-        # self.layer_sizes = [64, 32]
-        self.layer_sizes = [32, 64]
+#         self.name = name
+#         # self.layer_sizes = [64, 32]
+#         self.layer_sizes = [32, 64]
 
-        self.conv1 = nn.Conv2d(input_ch, self.layer_sizes[0], kernel_size=5)
-        conv1_output_dim = self.cnn_get_output_dim(
-            input_dim, 5, stride=1, padding=0)
-        pool1_output_dim = self.cnn_get_output_dim(
-            conv1_output_dim, 2, stride=2, padding=0)
+#         self.conv1 = nn.Conv2d(input_ch, self.layer_sizes[0], kernel_size=5)
+#         conv1_output_dim = self.cnn_get_output_dim(
+#             input_dim, 5, stride=1, padding=0)
+#         pool1_output_dim = self.cnn_get_output_dim(
+#             conv1_output_dim, 2, stride=2, padding=0)
 
-        self.conv2 = nn.Conv2d(
-            self.layer_sizes[0], self.layer_sizes[1], kernel_size=5)
-        conv2_output_dim = self.cnn_get_output_dim(
-            pool1_output_dim, kernel_size=5, stride=1, padding=0)
-        self.pool2_output_dim = self.cnn_get_output_dim(
-            conv2_output_dim, 2, stride=2, padding=0)
+#         self.conv2 = nn.Conv2d(
+#             self.layer_sizes[0], self.layer_sizes[1], kernel_size=5)
+#         conv2_output_dim = self.cnn_get_output_dim(
+#             pool1_output_dim, kernel_size=5, stride=1, padding=0)
+#         self.pool2_output_dim = self.cnn_get_output_dim(
+#             conv2_output_dim, 2, stride=2, padding=0)
 
-        self.conv2_drop = nn.Dropout2d()
-        """
-        self.fc1 = nn.Linear(self.pool2_output_dim ** 2 * self.layer_sizes[1], 1024)
-        self.bn1 = nn.BatchNorm1d(self.layer_sizes[2])
-        if self.output_dim is not None:
-            self.fc2 = nn.Linear(1024, output_dim)
-        """
+#         self.conv2_drop = nn.Dropout2d()
+#         """
+#         self.fc1 = nn.Linear(self.pool2_output_dim ** 2 * self.layer_sizes[1], 1024)
+#         self.bn1 = nn.BatchNorm1d(self.layer_sizes[2])
+#         if self.output_dim is not None:
+#             self.fc2 = nn.Linear(1024, output_dim)
+#         """
 
-    def cnn_get_output_dim(self, w1, kernel_size, stride, padding=0):
-        w2 = (w1 - kernel_size + 2*padding) // stride + 1
-        return w2
+#     def cnn_get_output_dim(self, w1, kernel_size, stride, padding=0):
+#         w2 = (w1 - kernel_size + 2*padding) // stride + 1
+#         return w2
 
-    def forward(self, x):
-        if type(x) == tuple:
-            x = x[1]
+#     def forward(self, x):
+#         if type(x) == tuple:
+#             x = x[1]
 
-        x = F.relu(F.max_pool2d(self.conv1(x), 2))
-        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
-        return x
+#         x = F.relu(F.max_pool2d(self.conv1(x), 2))
+#         x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
+#         return x
 
 
 class NetRNN(SaveableNNModule):
@@ -230,4 +230,42 @@ class NetMLP(SaveableNNModule):
         else:
             raise NotImplementedError()
 
+        return x1, x_prob
+
+
+class NetCNN(SaveableNNModule):
+    def __init__(self, 
+                 name, 
+                 input_dim,
+                 output_dim):
+        super(NetCNN, self).__init__()
+        mid_dim = (input_dim + output_dim) // 2
+
+        kern0 = self.get_kern_size(input_dim, mid_dim)
+        self.conv0 = nn.Conv1d(1, 8, kern0)
+
+        kern1 = self.get_kern_size(mid_dim, output_dim)
+        self.conv1 = nn.Conv1d(8, 1, kern1)
+
+        self.relu = nn.ReLU()
+
+    def get_kern_size(self, 
+                      input_dim, 
+                      output_dim, 
+                      stride=1, 
+                      padding=0):
+        # easier to compute kernel size 
+        assert stride == 1
+        kern_size = input_dim - output_dim + 2 * padding + 1
+        return kern_size
+
+    def forward(self, x):
+        if type(x) == tuple:
+            x, x_prob = x
+        else:
+            x_prob = None
+
+        x = torch.unsqueeze(x, dim=1)
+        x1 = self.conv1(self.relu(self.conv0(x)))
+        x1 = torch.squeeze(x1, dim=1)
         return x1, x_prob

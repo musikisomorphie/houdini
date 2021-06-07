@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from typing import Callable, Optional, Dict, Tuple, Union, List
 
-from HOUDINI.Library.NN import NetMLP, NetDO, SaveableNNModule
+from HOUDINI.Library.NN import NetMLP, NetDO, NetCNN, SaveableNNModule
 
 
 def get_nn_from_params_dict(uf: Dict) -> Tuple[nn.Module, List]:
@@ -33,6 +33,10 @@ def get_nn_from_params_dict(uf: Dict) -> Tuple[nn.Module, List]:
         new_nn = NetDO(uf['name'],
                        uf['input_dim'],
                        uf['dt_name'])
+    elif uf['type'] == 'CONV':
+        new_nn = NetCNN(uf['name'],
+                        uf['input_dim'],
+                        uf['output_dim'],)
     else:
         raise NotImplementedError()
 

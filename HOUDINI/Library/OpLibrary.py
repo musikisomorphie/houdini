@@ -46,28 +46,31 @@ class OpLibrary(FnLibrary):
                                                         self.func(self.A,
                                                                   self.C)), Op.pp_compose))
         elif op == 'repeat':
-            self.addItem(PPLibItem('repeat', self.func(AST.PPEnumSort(1, 4),
+            self.addItem(PPLibItem('repeat', self.func(AST.PPEnumSort(2, 4),
                                                        self.func(self.A,
                                                                  self.A),
                                                        self.func(self.A,
                                                                  self.A)), Op.pp_repeat))
         elif op == 'cat':
-            self.addItem(PPLibItem('cat', self.func(self.func(self.A,
+            self.addItem(PPLibItem('cat', self.func(self.func(self.lst(self.A),
                                                               self.lst(self.B)),
-                                                    self.func(self.A,
+                                                    self.func(self.lst(self.A),
                                                               self.B)), Op.pp_cat))
         elif op == 'map':
             self.addItem(PPLibItem('map', self.func(self.func(self.A,
                                                               self.B),
                                                     self.func(self.lst(self.A),
                                                               self.lst(self.B))), Op.pp_map))
-        elif op == 'fold':
-            self.addItem(PPLibItem('fold', self.func(self.func(self.B, self.A, self.B),
-                                                     self.B,
-                                                     self.func(self.lst(self.A), self.B)), Op.pp_reduce))
         elif op == 'conv':
-            self.addItem(PPLibItem('conv', self.func(self.func(self.lst(self.A), self.B),
-                                                     self.func(self.lst(self.A), self.lst(self.B))), Op.pp_conv))
+            self.addItem(PPLibItem('conv', self.func(self.func(self.A,
+                                                               self.B),
+                                                     self.func(self.lst(self.A),
+                                                               self.lst(self.B))), Op.pp_conv))
+        elif op == 'fold':
+            self.addItem(PPLibItem('fold', self.func(self.func(self.A,
+                                                               self.B),
+                                                     self.func(self.lst(self.A),
+                                                               self.lst(self.B))), Op.pp_reduce))
         else:
             raise NameError(
                 'Op name {} does not have corresponding function'.format(op))

@@ -86,8 +86,8 @@ def get_task_settings(data_dict: Dict,
         train_size=64,
         val_size=64,
         training_percentages=[100],
-        N=200,
-        M=1,
+        N=5000,
+        M=5,
         K=1,
         synthesizer=synthesizer,
         dbg_learn_parameters=dbg_learn_parameters,
@@ -218,8 +218,8 @@ def main(portec_dict: Dict,
                                       settings['dbg_learn_parameters'],
                                       synthesizer=synthesizer)
 
-    lib = OpLibrary(['do', 'compose', 'map',
-                     'repeat', 'cat'])
+    lib = OpLibrary(['repeat', 'do', 'compose', 'map',
+                     'cat', 'conv'])
 
     seq_tasks_info = get_seq_from_string(seq_str)
 

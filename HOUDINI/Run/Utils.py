@@ -216,8 +216,8 @@ def get_lganm_io_examples(lganm_envs: List[np.ndarray],
     lab_msk[outcome] = True
     cfd_msk = np.ones(dt_dim, dtype=bool)
     cfd_msk[outcome] = False
-    if confounder:
-        cfd_msk[confounder] = False
+    # if confounder:
+    #     cfd_msk[confounder] = False
     for env_id, env in enumerate(lganm_envs):
         print(env.shape)
         if env.shape[0] < max_len:

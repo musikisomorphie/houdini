@@ -121,3 +121,4 @@ Data/smallnorb/*.mat.gz
 
 
 HOUDINI/.vscode/*
+.vscode/

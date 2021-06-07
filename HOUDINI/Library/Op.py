@@ -38,7 +38,7 @@ def _list_to_tensor(input: torch.autograd.Variable,
     """
 
     input_list = torch.split(input, chunk, dim=spl_dim)
-    output = torch.cat(input_list, dim=cat_dim).squeeze()
+    output = torch.cat(input_list, dim=cat_dim).squeeze(dim=1)
     return output
 
 
@@ -130,25 +130,6 @@ def pp_map(fn):
     return ret
 
 
-def pp_reduce(fn, init=None):
-    def ret(iterable):
-        if type(iterable) == tuple:
-            iterable, iarg = iterable
-        else:
-            iarg = None
-
-        assert isinstance(iterable, torch.autograd.Variable), \
-            'the input type {} is not torch variable'.format(type(iterable))
-
-        iterable = torch.split(iterable, 1, dim=1)
-        if init is None:
-            output, iarg = reduce(fn, (iterable, iarg))
-        else:
-            output, iarg = reduce(fn, (iterable, iarg), init)
-        return output, iarg
-    return ret
-
-
 def pp_conv(fn):
     def ret(iterable):
         if type(iterable) == tuple:
@@ -159,17 +140,29 @@ def pp_conv(fn):
         assert isinstance(iterable, torch.autograd.Variable), \
             'the input type {} is not torch variable'.format(type(iterable))
 
-        # TODO: require further thought
-        # iterable = torch.split(iterable, 1, dim=1)
-        # zero = torch.zeros_like(iterable[0])
-        # iterable.insert(0, zero)
-        # iterable.append(zero)
-        # output = []
-        # for idx in range(1, len(iterable) - 1):
-        #     c_arr = [iterable[idx - 1], iterable[idx], iterable[idx + 1]]
-        #     output.append(fn(c_arr))
-        # output = _list_to_tensor(result)
-        return iterable, iarg
+        batch = iterable.shape[0]
+        iterable = _list_to_tensor(iterable)
+        interm, iarg = fn((iterable, iarg))
+        output = _tensor_to_list(interm, batch)
+        return output, iarg
+    return ret
+
+
+def pp_reduce(fn, init=None):
+    def ret(iterable):
+        if type(iterable) == tuple:
+            iterable, iarg = iterable
+        else:
+            iarg = None
+
+        assert isinstance(iterable, torch.autograd.Variable), \
+            'the input type {} is not torch variable'.format(type(iterable))
+
+        batch = iterable.shape[0]
+        iterable = _list_to_tensor(iterable)
+        interm, iarg = fn((iterable, iarg))
+        output = _tensor_to_list(interm, batch)
+        return output, iarg
     return ret
 
 

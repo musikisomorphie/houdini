@@ -138,4 +138,20 @@ def is_evaluable(st, ns) -> Tuple[bool, int]:
     if lib_names.count('do') != 1:
         return False, 17
 
+    # make sure that the do function directly work on the variable candidate
+    if lib_names[-1] != 'do':
+        return False, 18
+
+    # if lib_names.count('repeat') != 1 or lib_names.count('conv') != 1:
+    #     return False, 19
+    ablation = (['compose', 'cat', 'do'],
+                ['cat', 'compose', 'conv', 'do'],
+                ['compose', 'cat', 'repeat', 'do'],
+                )
+
+    if lib_names not in ablation:
+        return False, 19
+    print('\n\n', st)
+    print(lib_names, '\n\n')
+
     return True, 0

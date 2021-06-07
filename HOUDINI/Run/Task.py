@@ -240,8 +240,10 @@ class Task:
               len(nsynth.prog_unkinfo_tuples))
         print("Programs selected for evaluation:")
         for c_prog, c_unkSortMap in nsynth.prog_unkinfo_tuples:
-            print(repr_py(c_prog))
-            print(c_unkSortMap)
+            print('\n\n', repr_py(c_prog))
+            for key, val in c_unkSortMap.items():
+                print(key, val)
+            print('\n\n')
 
         train_io, val_io, test_io = self.get_io_examples()
 

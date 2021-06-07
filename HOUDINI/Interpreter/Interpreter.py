@@ -3,6 +3,7 @@ import math
 import random
 import pathlib
 import numpy as np
+import copy
 from enum import Enum
 from functools import reduce
 from collections import OrderedDict
@@ -499,6 +500,8 @@ class Interpreter:
         ########################Causal Training############################
         ###################################################################
         reject_var, accept_var = list(), list()
+        reject_vars = list()
+        accept_vars = list()
         sota_idx = None
         epochs = self.settings.warm_up // 4
         for _ in range(self.settings.var_num):
@@ -539,6 +542,8 @@ class Interpreter:
                                 sota_fns_dict[new_fn_name])
                     print(sota_idx, sota_acc, wass_dis,
                           accept_var, reject_var)
+            accept_vars.append(copy.deepcopy(accept_var))
+            reject_vars.append(copy.deepcopy(reject_var))
 
         self._set_weights_mode(prog_fns_dict, is_trn=True)
         self._train_data(data_loader_trn,
@@ -556,7 +561,7 @@ class Interpreter:
         print('Causal phase compeleted. \n')
 
         # collect all the output
-        var_cls = (reject_var, accept_var)
+        var_cls = (reject_vars, accept_vars)
         warm_up = (warm_grad, warm_score, 1 / (1 + np.exp(-sota_do)))
         caus_val = (val_grad, val_score, val_msk / (1 + np.exp(-val_do)))
         return prog_fns_dict, var_cls, warm_up, caus_val
@@ -590,6 +595,7 @@ class Interpreter:
         val_grads, val_scores, val_dos = list(), list(), list()
         warm_grads, warm_scores, warm_dos = list(), list(), list()
         jacads, fwers = list(), list()
+        jacads, fwers
         for _ in range(self.data_dict['repeat']):
             if unknown_fns_def is not None and \
                unknown_fns_def.__len__() > 0:
@@ -601,7 +607,7 @@ class Interpreter:
                                                                                           data_loader_trn,
                                                                                           data_loader_val,
                                                                                           data_loader_tst)
-                    reject_var, accept_var = var_cls
+                    rej_vars, acc_vars = var_cls
                     warm_grad, warm_score, warm_do = warm_up
                     val_grad, val_score, val_do = caus_val
 
@@ -612,27 +618,27 @@ class Interpreter:
             warm_scores.append(warm_score)
             warm_dos.append(warm_do.tolist())
 
+            accept_vars, reject_vars = list(), list()
             if self.output_type == ProgramOutputType.HAZARD:
-                num_cfd = 0
-                reject_var = set(tuple(var) for var in reject_var)
-                accept_var = set(tuple(var) for var in accept_var)
+                for acc in acc_vars:
+                    accept_vars.append(set(tuple(var) for var in acc))
                 causal_var = set(tuple(var) for var in self.data_dict['truth'])
             elif self.output_type == ProgramOutputType.MSE:
                 var_list = list(range(self.data_dict['mid_size']))
-                num_cfd = len(self.data_dict['confounder'])
-                # print(self.data_dict['confounder'])
-                var_remove = [self.data_dict['target']] + \
-                    self.data_dict['confounder']
+                var_remove = [self.data_dict['target']]
                 for var in sorted(var_remove, reverse=True):
                     var_list.remove(var)
                 var_np = np.array(var_list)
-                reject_var = set(var_np[list(reject_var)].tolist())
-                accept_var = set(var_np[list(accept_var)].tolist())
+                for acc in acc_vars:
+                    accept_vars.append(set(var_np[list(acc)].tolist()))
                 causal_var = set(self.data_dict['truth'])
 
-            jacad = (len(causal_var.intersection(accept_var)) + num_cfd) / \
-                (len(causal_var.union(accept_var)) + num_cfd)
-            fwer = not accept_var.issubset(causal_var)
+            jacad, fwer = list(), list()
+            for acc in accept_vars:
+                js = (len(causal_var.intersection(acc))) / \
+                    (len(causal_var.union(acc)))
+                jacad.append(js)
+                fwer.append(not acc.issubset(causal_var))
             jacads.append(jacad)
             fwers.append(fwer)
 
@@ -641,7 +647,9 @@ class Interpreter:
                     'warm_grads': warm_grads,
                     'warm_dos': warm_dos,
                     'jacads': jacads,
-                    'fwers': fwers}
+                    'fwers': fwers,
+                    'rej_vars': reject_vars,
+                    'acc_vars': accept_vars}
 
         if self.output_type == ProgramOutputType.HAZARD:
             cox_index = list(self.data_dict['clinical_meta']['causal'].keys())
@@ -668,7 +676,9 @@ class Interpreter:
             json_out['warm_scores'] = warm_scores
             json_out['val_scores'] = val_scores
 
-        self.data_dict['json_out'] = json_out
+        if 'json_out' not in self.data_dict:
+            self.data_dict['json_out'] = dict()
+        self.data_dict['json_out'][program] = json_out
         return {'accuracy': 0., 'prog_fns_dict': prog_fns_dict,
                 'test_accuracy': 0., 'evaluations_np': np.ones((1, 1))}
 
@@ -682,7 +692,8 @@ class Interpreter:
                  dbg_learn_parameters=True) -> dict:
 
         program_str = ReprUtils.repr_py(program)
-        unknown_fns_def = self.get_unknown_fns_definitions(unkSortMap)
+        unknown_fns_def = self.get_unknown_fns_definitions(
+            unkSortMap, program_str)
 
         res = self.evaluate_(program=program_str,
                              unknown_fns_def=unknown_fns_def,
@@ -708,7 +719,8 @@ class Interpreter:
         # print(max(wass_dis))
         return max(wass_dis), np.mean(np.array(res))
 
-    def get_unknown_fns_definitions(self, unkSortMap):
+    def get_unknown_fns_definitions(self, unkSortMap, prog_str):
+        print('the string of program: {}'.format(prog_str))
         # TODO: double-check. may need re-writing.
         unk_fns_interpreter_def_list = []
 
@@ -716,16 +728,25 @@ class Interpreter:
             fn_input_sort = unk_fn.args[0]
             fn_output_sort = unk_fn.rtpe
             output_dim = fn_output_sort.shape[1].value
-            output_type = fn_output_sort.param_sort
-            print(fn_input_sort, fn_output_sort, type(output_type))
+
+            nn_idx = prog_str.find(unk_fn_name)
+            lib_idx = prog_str.rfind('lib.', 0, nn_idx)
+            lib_nm = prog_str[lib_idx:nn_idx-1]
+            print(lib_nm, unk_fn_name)
 
             if type(fn_input_sort) == AST.PPTensorSort and fn_input_sort.shape.__len__() == 2:
                 input_dim = fn_input_sort.shape[1].value
-                if input_dim == output_dim:
+                if lib_nm == 'lib.do':
+                    assert input_dim == output_dim
                     uf = {'type': 'DO',
                           'name': unk_fn_name,
                           'input_dim': input_dim,
                           'dt_name': self.data_dict['dict_name']}
+                elif lib_nm == 'lib.conv':
+                    uf = {'type': 'CONV',
+                          'name': unk_fn_name,
+                          'input_dim': input_dim,
+                          'output_dim': output_dim}
                 else:
                     uf = {'type': 'MLP',
                           'name': unk_fn_name,
