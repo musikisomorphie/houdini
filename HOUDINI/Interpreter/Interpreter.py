@@ -409,7 +409,7 @@ class Interpreter:
                                          weight_decay=0.001)
 
             for epoch in range(self.settings.warm_up):
-                print('Starting warm-up epoch {}'.format(epoch))
+                # print('Starting warm-up epoch {}'.format(epoch))
                 self._set_weights_mode(prog_fns_dict, is_trn=True)
                 self._train_data(data_loader_trn,
                                  program,
@@ -433,13 +433,13 @@ class Interpreter:
                     sota_acc, _, _, sota_fns_dict = sota_tuple
                     sota_wss = wass_dis
                     sota_do = parm_do[0][0].detach().cpu().numpy()
-                    print('warm_do: ', sota_do)
-                    print('sigmoid: ', torch.sigmoid(
-                        parm_do[0][0]).detach().cpu().numpy())
-                    print('softmax: ', nn.Softmax(dim=0)
-                          (parm_do[0][0]).detach().cpu().numpy())
-                    print('sota_acc: {}, sota_wass: {}'.format(
-                        sota_acc, sota_wss))
+                    # print('warm_do: ', sota_do)
+                    # print('sigmoid: ', torch.sigmoid(
+                    #     parm_do[0][0]).detach().cpu().numpy())
+                    # print('softmax: ', nn.Softmax(dim=0)
+                    #       (parm_do[0][0]).detach().cpu().numpy())
+                    # print('sota_acc: {}, sota_wass: {}'.format(
+                    #     sota_acc, sota_wss))
 
         if self.output_type == ProgramOutputType.HAZARD:
             # TODO#TODO#TODO#TODO#TODO
@@ -454,8 +454,8 @@ class Interpreter:
             sota_ord_idx, _ = zip(*sorted(zip(caus_grp,
                                               grad_grp),
                                           key=lambda t: t[1]))
-            print(sota_do)
-            print(sota_ord_idx)
+            # print(sota_do)
+            # print(sota_ord_idx)
             # cau_grp = self.data_dict['clinical_meta']['causal_grp']
             # for cau in caus_grp:
             #     grad_grp.append(np.max(sota_do[cau]))
@@ -465,7 +465,7 @@ class Interpreter:
         elif self.output_type == ProgramOutputType.MSE:
             sota_ord_idx = np.argsort(sota_do).tolist()
 
-        print('Warm-up phase compeleted. \n')
+        # print('Warm-up phase compeleted. \n')
 
         sota = (sota_acc,
                 sota_wss,
@@ -524,7 +524,7 @@ class Interpreter:
                         msk[0, sota_idx] = 0
                         parm_do[1].copy_(msk)
                         break
-            print(sota_idx)
+            # print(sota_idx)
             for epoch in range(epochs):
                 self._set_weights_mode(prog_fns_dict, is_trn=True)
                 self._train_data(data_loader_trn,
@@ -542,8 +542,8 @@ class Interpreter:
                     reject_var.append(sota_idx)
                     self._clone_weights_state(prog_fns_dict,
                                               sota_fns_dict)
-                    print(sota_idx, sota_acc, wass_dis,
-                          accept_var, reject_var)
+                    # print(sota_idx, sota_acc, wass_dis,
+                    #       accept_var, reject_var)
                     break
 
                 if epoch + 1 == epochs:
@@ -552,8 +552,8 @@ class Interpreter:
                         if issubclass(type(new_fn), nn.Module):
                             new_fn.load_state_dict(
                                 sota_fns_dict[new_fn_name])
-                    print(sota_idx, sota_acc, wass_dis,
-                          accept_var, reject_var)
+                    # print(sota_idx, sota_acc, wass_dis,
+                    #       accept_var, reject_var)
             accept_vars.append(copy.deepcopy(accept_var))
             reject_vars.append(copy.deepcopy(reject_var))
 
@@ -569,8 +569,8 @@ class Interpreter:
                                                     compute_grad=True)
         val_do = parm_do[0][0].detach().cpu().numpy()
         val_msk = parm_do[1][0].detach().cpu().numpy()
-        print(val_msk)
-        print('Causal phase compeleted. \n')
+        # print(val_msk)
+        # print('Causal phase compeleted. \n')
 
         # collect all the output
         var_cls = (reject_vars, accept_vars)
@@ -634,9 +634,9 @@ class Interpreter:
             if self.output_type == ProgramOutputType.HAZARD:
                 for acc in acc_vars:
                     accept_vars.append(set(acc))
-                print(accept_vars)
+                # print(accept_vars)
                 causal_var = set(var[0] for var in self.data_dict['truth'])
-                print(causal_var)
+                # print(causal_var)
             elif self.output_type == ProgramOutputType.MSE:
                 var_list = list(range(self.data_dict['mid_size']))
                 var_remove = [self.data_dict['target']]
@@ -677,7 +677,7 @@ class Interpreter:
             warm_utils.vis_plot(warm_scores,
                                 pathlib.Path(cox_dir),
                                 self.data_dict['metric_scores'])
-            print(warm_utils.summary(pathlib.Path(cox_dir)), '\n')
+            # print(warm_utils.summary(pathlib.Path(cox_dir)), '\n')
 
             val_grads = np.asarray(val_grads)
             val_scores = list(zip(*val_scores))
@@ -687,7 +687,7 @@ class Interpreter:
             val_utils.vis_plot(val_scores,
                                pathlib.Path(cox_dir),
                                self.data_dict['metric_scores'])
-            print(val_utils.summary(pathlib.Path(cox_dir)))
+            # print(val_utils.summary(pathlib.Path(cox_dir)))
 
             json_out['warm_scores'] = warm_scores
             json_out['val_scores'] = val_scores
@@ -736,7 +736,7 @@ class Interpreter:
         return max(wass_dis), np.mean(np.array(res))
 
     def get_unknown_fns_definitions(self, unkSortMap, prog_str):
-        print('the string of program: {}'.format(prog_str))
+        # print('the string of program: {}'.format(prog_str))
         # TODO: double-check. may need re-writing.
         unk_fns_interpreter_def_list = []
 
@@ -748,7 +748,7 @@ class Interpreter:
             nn_idx = prog_str.find(unk_fn_name)
             lib_idx = prog_str.rfind('lib.', 0, nn_idx)
             lib_nm = prog_str[lib_idx:nn_idx-1]
-            print(lib_nm, unk_fn_name)
+            # print(lib_nm, unk_fn_name)
 
             if type(fn_input_sort) == AST.PPTensorSort and fn_input_sort.shape.__len__() == 2:
                 input_dim = fn_input_sort.shape[1].value
