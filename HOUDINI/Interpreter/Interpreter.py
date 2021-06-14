@@ -444,13 +444,24 @@ class Interpreter:
         if self.output_type == ProgramOutputType.HAZARD:
             # TODO#TODO#TODO#TODO#TODO
             grad_grp = list()
-            caus_grp = self.data_dict['clinical_meta']['causal_grp']
+            caus_grp = list()
             # sort the causal group based on the mean gradient weight
-            for cau in caus_grp:
-                grad_grp.append(np.max(sota_do[cau]))
+            c_grp = self.data_dict['clinical_meta']['causal_grp']
+            for cau in c_grp:
+                grad_grp.extend([np.max(sota_do[cau])] * len(cau))
+                caus_grp.extend(cau)
+                sota_do[cau] = np.max(sota_do[cau])
             sota_ord_idx, _ = zip(*sorted(zip(caus_grp,
                                               grad_grp),
                                           key=lambda t: t[1]))
+            print(sota_do)
+            print(sota_ord_idx)
+            # cau_grp = self.data_dict['clinical_meta']['causal_grp']
+            # for cau in caus_grp:
+            #     grad_grp.append(np.max(sota_do[cau]))
+            # sota_ord_idx, _ = zip(*sorted(zip(caus_grp,
+            #                                   grad_grp),
+            #                               key=lambda t: t[1]))
         elif self.output_type == ProgramOutputType.MSE:
             sota_ord_idx = np.argsort(sota_do).tolist()
 
@@ -513,6 +524,7 @@ class Interpreter:
                         msk[0, sota_idx] = 0
                         parm_do[1].copy_(msk)
                         break
+            print(sota_idx)
             for epoch in range(epochs):
                 self._set_weights_mode(prog_fns_dict, is_trn=True)
                 self._train_data(data_loader_trn,
@@ -526,7 +538,7 @@ class Interpreter:
                                              prog_fns_dict)[0]
 
                 wass_dis = self._wass1(val_mse)
-                if wass_dis < self.settings.lambda_1 * (1 - np.max(sota_do[sota_idx])) * sota_wss:
+                if wass_dis < self.settings.lambda_1 * (1 - sota_do[sota_idx]) * sota_wss:
                     reject_var.append(sota_idx)
                     self._clone_weights_state(prog_fns_dict,
                                               sota_fns_dict)
@@ -621,8 +633,10 @@ class Interpreter:
             accept_vars, reject_vars = list(), list()
             if self.output_type == ProgramOutputType.HAZARD:
                 for acc in acc_vars:
-                    accept_vars.append(set(tuple(var) for var in acc))
-                causal_var = set(tuple(var) for var in self.data_dict['truth'])
+                    accept_vars.append(set(acc))
+                print(accept_vars)
+                causal_var = set(var[0] for var in self.data_dict['truth'])
+                print(causal_var)
             elif self.output_type == ProgramOutputType.MSE:
                 var_list = list(range(self.data_dict['mid_size']))
                 var_remove = [self.data_dict['target']]
@@ -667,7 +681,7 @@ class Interpreter:
 
             val_grads = np.asarray(val_grads)
             val_scores = list(zip(*val_scores))
-            val_utils = MetricUtils.coxsum(cox_index, 
+            val_utils = MetricUtils.coxsum(cox_index,
                                            val_grads,
                                            file_nm='portec_{}'.format(program))
             val_utils.vis_plot(val_scores,

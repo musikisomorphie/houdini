@@ -7,8 +7,6 @@ path:
             LVSI_2Cat: 0
             log2_id: 0
             total_area: 0
-            # EBRT: 0
-            # VBT: 0
         causal_num: 5
         causal_grp: [[0], [1], [2], [3], [4]]
         outcome:
@@ -33,9 +31,7 @@ mole:
             p53_mutant: 0
             log2_id: 0
             total_area: 0
-            # EBRT: 0
-            # VBT: 0
-        causal_num: 7
+        causal_num: 9
         causal_grp: [[0], [1], [2], [3], [4, 5, 6], [7], [8]]
         outcome:
             - RFSstatus
@@ -44,61 +40,7 @@ mole:
         - Concord_Index
         - Brier_Score
         - Binomial_Log-Likelihood
-    truth: [[0], [1], [2], [3], [4, 5, 6]]
-
-immu_cd8:
-    clinical_meta:
-        filter: [Included_CIR2020, 1]
-        causal:           
-            MyometrialInvasion: 0
-            Grade_2Cat: 0
-            LVSI_2Cat: 0
-            L1CAM_2var: 0
-            POLE: 0
-            MMRd: 0
-            p53_mutant: 0
-            log2_av_tot_cd8t: 0
-            log2_id: 0
-            total_area: 0
-            # EBRT: 0
-            # VBT: 0
-        causal_num: 8
-        causal_grp: [[0], [1], [2], [3], [4, 5, 6], [7], [8], [9]]
-        outcome:
-            - RFSstatus
-            - RFSYears
-    metric_scores:
-        - Concord_Index
-        - Brier_Score
-        - Binomial_Log-Likelihood
-    truth: [[0], [1], [2], [3], [4, 5, 6], [7]]
-
-immu_cd103:
-    clinical_meta:
-        filter: [Included_CIR2020, 1]
-        causal:           
-            MyometrialInvasion: 0
-            Grade_2Cat: 0
-            LVSI_2Cat: 0
-            L1CAM_2var: 0
-            POLE: 0
-            MMRd: 0
-            p53_mutant: 0
-            log2_av_tot_cd103t: 0
-            log2_id: 0
-            total_area: 0
-            # EBRT: 0
-            # VBT: 0
-        causal_num: 8
-        causal_grp: [[0], [1], [2], [3], [4, 5, 6], [7], [8], [9]]
-        outcome:
-            - RFSstatus
-            - RFSYears
-    metric_scores:
-        - Concord_Index
-        - Brier_Score
-        - Binomial_Log-Likelihood
-    truth: [[0], [1], [2], [3], [4, 5, 6], [7]]
+    truth: [[0], [1], [2], [3], [4], [5], [6]]
 
 immu:
     clinical_meta:
@@ -112,13 +54,10 @@ immu:
             MMRd: 0
             p53_mutant: 0
             log2_av_tot_cd8t: 0
-            log2_av_tot_cd103t: 0
             log2_id: 0
             total_area: 0
-            # EBRT: 0
-            # VBT: 0
-        causal_num: 9
-        causal_grp: [[0], [1], [2], [3], [4, 5, 6], [7], [8], [9], [10]]
+        causal_num: 10
+        causal_grp: [[0], [1], [2], [3], [4, 5, 6], [7], [8], [9]]
         outcome:
             - RFSstatus
             - RFSYears
@@ -126,8 +65,7 @@ immu:
         - Concord_Index
         - Brier_Score
         - Binomial_Log-Likelihood
-    truth: [[0], [1], [2], [3], [4, 5, 6], [7], [8]]
-
+    truth: [[0], [1], [2], [3], [4], [5], [6], [7]]
 
 ## sanity checks
 path_sanity1:
@@ -137,11 +75,8 @@ path_sanity1:
             MyometrialInvasion: 0
             Grade_2Cat: 0
             LVSI_2Cat: 0
-            # log2_id: 0
-            # total_area: 0
             EBRT: 0
-            # VBT: 0
-        causal_num: 5
+        causal_num: 4
         causal_grp: [[0], [1], [2], [3]]
         outcome:
             - RFSstatus
@@ -150,7 +85,7 @@ path_sanity1:
         - Concord_Index
         - Brier_Score
         - Binomial_Log-Likelihood
-    truth: [[0], [1], [2], [3]] # align with lganm, assumed the gt causal variables
+    truth: [[0], [1], [2], [3]]
 
 path_sanity2:
     clinical_meta:
@@ -159,11 +94,8 @@ path_sanity2:
             MyometrialInvasion: 0
             Grade_2Cat: 0
             LVSI_2Cat: 0
-            # log2_id: 0
-            # total_area: 0
-            EBRT: 0
-            # VBT: 0
-        causal_num: 5
+            VBT: 0
+        causal_num: 4
         causal_grp: [[0], [1], [2], [3]]
         outcome:
             - RFSstatus
@@ -172,8 +104,7 @@ path_sanity2:
         - Concord_Index
         - Brier_Score
         - Binomial_Log-Likelihood
-    truth: [[0], [1], [2]] # align with lganm, assumed the gt causal variables
-
+    truth: [[0], [1], [2], [3]]
 
 ## statistical checks
 path_stat:
@@ -192,7 +123,7 @@ path_stat:
         - Concord_Index
         - Brier_Score
         - Binomial_Log-Likelihood
-    truth: [[0], [1], [2]] # align with lganm, assumed the gt causal variables
+    truth: [[0], [1], [2]]
 
 mole_stat:
     clinical_meta:
@@ -205,7 +136,7 @@ mole_stat:
             POLE: 0
             MMRd: 0
             p53_mutant: 0
-        causal_num: 5
+        causal_num: 7
         causal_grp: [[0], [1], [2], [3], [4, 5, 6]]
         outcome:
             - RFSstatus
@@ -214,9 +145,9 @@ mole_stat:
         - Concord_Index
         - Brier_Score
         - Binomial_Log-Likelihood
-    truth: [[0], [1], [2], [3], [4, 5, 6]]
+    truth: [[0], [1], [2], [3], [4], [5], [6]]
 
-immu_cd8_stat:
+immu_stat:
     clinical_meta:
         filter: [Included_CIR2020, 1]
         causal:           
@@ -228,7 +159,7 @@ immu_cd8_stat:
             MMRd: 0
             p53_mutant: 0
             log2_av_tot_cd8t: 0
-        causal_num: 6
+        causal_num: 8
         causal_grp: [[0], [1], [2], [3], [4, 5, 6], [7]]
         outcome:
             - RFSstatus
@@ -237,9 +168,9 @@ immu_cd8_stat:
         - Concord_Index
         - Brier_Score
         - Binomial_Log-Likelihood
-    truth: [[0], [1], [2], [3], [4, 5, 6], [7]]
+    truth: [[0], [1], [2], [3], [4], [5], [6], [7]]
 
-
+## parm calibration \lambda
 path_cal:
     clinical_meta:
         filter: [Included_CIR2020, 0]
@@ -248,9 +179,6 @@ path_cal:
             Grade_2Cat: 0
             LVSI_2Cat: 0
             log2_id: 0
-            # total_area: 0
-            # EBRT: 0
-            # VBT: 0
         causal_num: 4
         causal_grp: [[0], [1], [2], [3]]
         outcome:
@@ -260,4 +188,4 @@ path_cal:
         - Concord_Index
         - Brier_Score
         - Binomial_Log-Likelihood
-    truth: [[0], [1], [2]] # align with lganm, assumed the gt causal variables
+    truth: [[0], [1], [2]]
