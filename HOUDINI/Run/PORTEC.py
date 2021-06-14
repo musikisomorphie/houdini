@@ -87,7 +87,7 @@ def get_task_settings(data_dict: Dict,
         val_size=64,
         training_percentages=[100],
         N=5000,
-        M=5,
+        M=1,
         K=1,
         synthesizer=synthesizer,
         dbg_learn_parameters=dbg_learn_parameters,
@@ -218,8 +218,8 @@ def main(portec_dict: Dict,
                                       settings['dbg_learn_parameters'],
                                       synthesizer=synthesizer)
 
-    lib = OpLibrary(['repeat', 'do', 'compose', 'map',
-                     'cat', 'conv'])
+    lib = OpLibrary(['do', 'compose',
+                     'repeat', 'cat', 'conv'])
 
     seq_tasks_info = get_seq_from_string(seq_str)
 
@@ -249,7 +249,7 @@ def parse_args():
                         choices=['immu', 'mole', 'path',
                                  'immu_cd8', 'immu_cd103',
                                  'path_sanity1', 'path_sanity2',
-                                 'path_stat', 'mole_stat', 'immu_cd8_stat'],
+                                 'path_stat', 'mole_stat', 'immu_cd8_stat', 'path_cal'],
                         default='immu',
                         help='the experiments with confounders. (default: %(default)s)')
     parser.add_argument('--dt-file',
@@ -297,6 +297,7 @@ if __name__ == '__main__':
     pathlib.Path(portec_dict['results_dir']).mkdir(
         parents=True, exist_ok=True)
 
+    json_out = dict()
     for sequence_idx, sequence in enumerate(seq_info_dict['sequences']):
         for task_id in range(seq_info_dict['num_tasks']):
             main(portec_dict,
@@ -305,24 +306,51 @@ if __name__ == '__main__':
                  prefixes[sequence_idx],
                  settings['synthesizer'])
 
-    jacads = np.asarray(portec_dict['json_out']['jacads'])
-    fwers = np.asarray(portec_dict['json_out']['fwers'])
-    warm_dos = np.asarray(portec_dict['json_out']['warm_dos'])
-    caus_dos = np.asarray(portec_dict['json_out']['val_dos'])
-    portec_dict['json_out']['jacads_mean'] = np.mean(jacads)
-    portec_dict['json_out']['jacads_std'] = np.std(jacads)
-    portec_dict['json_out']['fwers_mean'] = np.mean(fwers)
-    portec_dict['json_out']['fwers_std'] = np.std(fwers)
-    portec_dict['json_out']['warm_prob'] = np.mean(warm_dos, axis=0).tolist()
-    portec_dict['json_out']['caus_prob'] = np.mean(caus_dos, axis=0).tolist()
+    res_dict = portec_dict['json_out']
+    for prog_str, prog_dict in res_dict.items():
+        if prog_str not in json_out:
+            json_out[prog_str] = dict()
 
-    print('\nJaccard Similarity (JS) mean: {}, std: {}.'.format(
-        np.mean(jacads), np.std(jacads)))
-    print('Family-wise error rate (FWER) mean: {}, std: {}.'.format(
-        np.mean(fwers), np.std(fwers)))
-    print('warm probability: {}'.format(np.mean(warm_dos, axis=0)))
-    print('caus probability: {}'.format(np.mean(caus_dos, axis=0)))
+        jacads = np.asarray(prog_dict['jacads'])
+        fwers = np.asarray(prog_dict['fwers'])
+        warm_dos = np.asarray(prog_dict['warm_dos'])
+        caus_dos = np.asarray(prog_dict['val_dos'])
+        json_out[prog_str]['jacads_mean'] = np.mean(jacads, axis=0).tolist()
+        json_out[prog_str]['jacads_std'] = np.std(jacads, axis=0).tolist()
+        json_out[prog_str]['fwers_mean'] = np.mean(fwers, axis=0).tolist()
+        json_out[prog_str]['fwers_std'] = np.std(fwers, axis=0).tolist()
+        json_out[prog_str]['warm_prob'] = np.mean(warm_dos, axis=0).tolist()
+        json_out[prog_str]['caus_prob'] = np.mean(caus_dos, axis=0).tolist()
+        json_out[prog_str]['val_grads'] = prog_dict['val_grads']
+        json_out[prog_str]['val_dos'] = prog_dict['val_dos']
+        json_out[prog_str]['warm_scores'] = prog_dict['warm_scores']
+        json_out[prog_str]['val_scores'] = prog_dict['val_scores']
+        print(jacads.shape, fwers.shape)
+        print('\nprogram: {}'.format(prog_str))
+        print('Jaccard Similarity (JS) mean: {}, std: {}.'.format(
+            np.mean(jacads, axis=0), np.std(jacads, axis=0)))
+        print('Family-wise error rate (FWER) mean: {}, std: {}.'.format(
+            np.mean(fwers, axis=0), np.std(fwers, axis=0)))
+
+
+    # jacads = np.asarray(portec_dict['json_out']['jacads'])
+    # fwers = np.asarray(portec_dict['json_out']['fwers'])
+    # warm_dos = np.asarray(portec_dict['json_out']['warm_dos'])
+    # caus_dos = np.asarray(portec_dict['json_out']['val_dos'])
+    # portec_dict['json_out']['jacads_mean'] = np.mean(jacads)
+    # portec_dict['json_out']['jacads_std'] = np.std(jacads)
+    # portec_dict['json_out']['fwers_mean'] = np.mean(fwers)
+    # portec_dict['json_out']['fwers_std'] = np.std(fwers)
+    # portec_dict['json_out']['warm_prob'] = np.mean(warm_dos, axis=0).tolist()
+    # portec_dict['json_out']['caus_prob'] = np.mean(caus_dos, axis=0).tolist()
+
+    # print('\nJaccard Similarity (JS) mean: {}, std: {}.'.format(
+    #     np.mean(jacads), np.std(jacads)))
+    # print('Family-wise error rate (FWER) mean: {}, std: {}.'.format(
+    #     np.mean(fwers), np.std(fwers)))
+    # print('warm probability: {}'.format(np.mean(warm_dos, axis=0)))
+    # print('caus probability: {}'.format(np.mean(caus_dos, axis=0)))
 
     json_file = portec_dict['results_dir'] / 'portec_table.json'
     with open(str(json_file), 'w', encoding='utf-8') as f:
-        json.dump(portec_dict['json_out'], f, ensure_ascii=False, indent=4)
+        json.dump(json_out, f, ensure_ascii=False, indent=4)

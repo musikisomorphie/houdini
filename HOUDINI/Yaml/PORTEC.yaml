@@ -238,3 +238,26 @@ immu_cd8_stat:
         - Brier_Score
         - Binomial_Log-Likelihood
     truth: [[0], [1], [2], [3], [4, 5, 6], [7]]
+
+
+path_cal:
+    clinical_meta:
+        filter: [Included_CIR2020, 0]
+        causal:
+            MyometrialInvasion: 0
+            Grade_2Cat: 0
+            LVSI_2Cat: 0
+            log2_id: 0
+            # total_area: 0
+            # EBRT: 0
+            # VBT: 0
+        causal_num: 4
+        causal_grp: [[0], [1], [2], [3]]
+        outcome:
+            - RFSstatus
+            - RFSYears
+    metric_scores:
+        - Concord_Index
+        - Brier_Score
+        - Binomial_Log-Likelihood
+    truth: [[0], [1], [2]] # align with lganm, assumed the gt causal variables

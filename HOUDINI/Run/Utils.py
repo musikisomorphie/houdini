@@ -1,15 +1,23 @@
+from operator import index
+from Data.DataGenerator import NumpyDataSetIterator, ListNumpyDataSetIterator
+from matplotlib import pyplot as plt
+from matplotlib.font_manager import FontProperties
+from typing import List, Dict, Optional, Tuple
+from collections import defaultdict
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import math
+import json
 import random
 import csv
 import pyreadstat
 import pickle
 import pathlib
 import itertools
-from collections import defaultdict
-from typing import List, Dict, Optional, Tuple
-from matplotlib import pyplot as plt
-from Data.DataGenerator import NumpyDataSetIterator, ListNumpyDataSetIterator
+import scipy.stats
+import seaborn as sns
+sns.set_theme()
 
 
 def mk_tag(tag: str, content: str, cls: List[str] = [], attribs: Dict = {}):
@@ -161,7 +169,7 @@ def get_portec_io_examples1(portec_file: pathlib.Path,
 
     # the values of the cau_var are the median of that variable,
     # which is used to create binary lable
-    log2_id = 9 # median, 9.17 (portec1),9.06 (portec2) 
+    log2_id = 9  # median, 9.17 (portec1),9.06 (portec2)
     portec = list()
     df_input, df_lab = list(), list()
     max_len = 0
@@ -408,6 +416,75 @@ def compute_aicp_results(path):
     return aicp
 
 
+def heat_plot(json_file, var_list, exp_nm, func_nm, out_folder):
+    with open(str(json_file)) as json_data:
+        res_dict = json.load(json_data)
+        for _, prog_dict in res_dict.items():
+            caus_like = np.asarray(prog_dict['val_dos']).T
+            hazd_coef = np.asarray(prog_dict['val_grads']).T
+            pear_cau = np.zeros((caus_like.shape[0], caus_like.shape[0]))
+            pear_haz = np.zeros((caus_like.shape[0], caus_like.shape[0]))
+            pear_tot = np.zeros((caus_like.shape[0], caus_like.shape[0]))
+            # corr = scipy.stats.pearsonr(caus_like, hazd_coef)
+            mask = np.zeros_like(pear_cau)
+            mask[np.triu_indices_from(mask, 1)] = True
+
+            if func_nm == 'spearman':
+                func = scipy.stats.spearmanr
+            elif func_nm == 'kendall':
+                func = scipy.stats.kendalltau
+            elif func_nm == 'pearson':
+                func = scipy.stats.pearsonr
+            else:
+                raise NotImplementedError()
+
+            for i in range(caus_like.shape[0]):
+                for j in range(hazd_coef.shape[0]):
+                    pear_cau[i, j] = func(caus_like[i, ], caus_like[j, ])[0]
+                    pear_haz[i, j] = func(hazd_coef[i, ], hazd_coef[j, ])[0]
+                    pear_tot[i, j] = func(caus_like[i, ], hazd_coef[j, ])[0]
+
+        df_cau = pd.DataFrame(pear_cau, columns=var_list, index=var_list)
+        df_haz = pd.DataFrame(pear_haz, columns=var_list, index=var_list)
+        df_tot = pd.DataFrame(pear_tot, columns=var_list, index=var_list)
+
+        font = FontProperties()
+        font.set_family('Helvetica')
+        # font.set_name('Helvetica')
+
+        fig, ax = plt.subplots(1, 2, sharey=True)
+        s_0 = sns.heatmap(df_cau, annot=True, cbar=False, mask=mask, center=0, cmap="RdBu_r",
+                          ax=ax[0], vmin=-1, vmax=1)
+        s_0.set_xticklabels(s_0.get_xticklabels(), rotation=45,
+                            fontsize=14, fontweight='bold', fontproperties=font)
+        s_0.set_yticklabels(s_0.get_yticklabels(),
+                            fontsize=14, fontweight='bold', fontproperties=font)
+        ax[0].set_title('Causal Probability', pad=20, fontsize=24,
+                        fontweight='bold', fontproperties=font)
+
+        s_1 = sns.heatmap(df_haz, annot=True, mask=mask, center=0, cmap="RdBu_r",
+                          ax=ax[1], vmin=-1, vmax=1)
+        s_1.set_xticklabels(s_1.get_xticklabels(), rotation=45,
+                            fontsize=14, fontweight='bold', fontproperties=font)
+        ax[1].set_title('Hazard Coefficient', pad=20, fontsize=24,
+                        fontweight='bold', fontproperties=font)
+
+        fig.set_size_inches(32, 18, forward=True)
+        plt.savefig(str(out_folder / '{}_{}_split.svg'.format(exp_nm, func_nm)))
+
+        fig, ax = plt.subplots(1, 1)
+        s_0 = sns.heatmap(np.abs(df_tot), annot=True, cbar=True, center=0, cmap="RdBu_r",
+                          ax=ax, vmin=-1, vmax=1)
+        s_0.set_xticklabels(s_0.get_xticklabels(), rotation=45,
+                            fontsize=14, fontweight='bold', fontproperties=font)
+        s_0.set_yticklabels(s_0.get_yticklabels(),
+                            fontsize=14, fontweight='bold', fontproperties=font)
+
+        # plt.show()
+        fig.set_size_inches(32, 18, forward=True)
+        plt.savefig(str(out_folder / '{}_{}_mixed.svg'.format(exp_nm, func_nm)))
+
+
 def main():
     # sav_file = pathlib.Path('/raid/jiqing/Data/PORTEC/PORTEC12-1-2-21.sav')
     # csv_file = sav_file.with_suffix('.csv')
@@ -416,9 +493,47 @@ def main():
     # sav_file = pathlib.Path('/home/histopath/Data/PORTEC/')
     # prep_sav(sav_file)
 
-    aicp_path = pathlib.Path(
-        '/home/histopath/Data/PORTEC/Results_Nature/abcd_0/aicp/n_1000.pickle')
-    aicp_tests = compute_aicp_results(aicp_path)
+    # aicp_path = pathlib.Path(
+    #     '/home/histopath/Data/PORTEC/Results_Nature/abcd_0/aicp/n_1000.pickle')
+    # aicp_tests = compute_aicp_results(aicp_path)
+
+    # funcs = ['pearson', 'spearman', 'kendall']
+    # exps = ('path', 'mole', 'immu_cd8')
+    # var_lists = (['Myometrial invasion', 'Grade', 'LVSI', 'Vital area', 'Patient ID'],
+    #              ['Myometrial invasion', 'Grade', 'LVSI', 'L1CAM', 'POLE',
+    #               'MMRd', 'p53mutant', 'Vital area', 'Patient ID'],
+    #              ['Myometrial invasion', 'Grade', 'LVSI', 'L1CAM', 'POLE',
+    #               'MMRd', 'p53mutant', 'CD8+', 'Vital area', 'Patient ID'])
+    # res_dir = pathlib.Path('/home/histopath/Data/PORTEC/Results/')
+    # out_dir = pathlib.Path(
+    #     '/home/histopath/Data/PORTEC/Results_Nature/heatmap')
+    # for e_id, exp in enumerate(exps):
+    #     for func_nm in funcs:
+    #         json_file = res_dir / exp / 'proposed_64' / 'portec_table.json'
+    #         heat_plot(json_file, var_lists[e_id], exp, func_nm, out_dir)
+
+    exps = ('path', 'mole', 'immu_cd8')
+    met_nms = ('c-id', 'brie', 'bino')
+    stg_nms = ['warm-up', 'complete']
+    res_dir = pathlib.Path('/home/histopath/Data/PORTEC/Results/')
+    for e_id, exp in enumerate(exps):
+        json_file = res_dir / exp / 'proposed' / 'portec_table.json'
+        with open(str(json_file)) as json_data:
+            res_dict = list(json.load(json_data).values())[0]
+            metrics = [res_dict['warm_scores'], res_dict['val_scores']]
+            for ms_id, mets in enumerate(metrics):
+                print(exp, stg_nms[ms_id])
+                for m_id, met in enumerate(mets):
+                    mn, q1, median, q3, mx = np.percentile(
+                        np.asarray(met), [0, 25, 50, 75, 100])
+                    met_sort = np.sort(np.asarray(met))
+                    met_sort = met_sort[(
+                        met_sort >= q1 - 1.5 * (q3 - q1)) & (met_sort <= q3 + 1.5 * (q3 - q1))]
+                    mn = met_sort[0]
+                    mx = met_sort[-1]
+                    print('{:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}'.format(mn, q1 - mn,
+                                                                             median - q1, q3 - median, mx - q3, mx))
+                print('\n')
 
 
 if __name__ == '__main__':

@@ -333,24 +333,22 @@ if __name__ == '__main__':
                      settings['synthesizer'],
                      lganm_dict['confounder'])
                 res_dict = lganm_dict['json_out']
-                for prog_str in res_dict:
+                for prog_str, prog_dict in res_dict.items():
                     if prog_str not in json_out:
                         json_out[prog_str] = {'jacads': list(),
                                               'fwers': list(),
                                               'errors': list(),
                                               'rejects': list(),
                                               'accepts': list()}
-                    json_out[prog_str]['jacads'].extend(
-                        res_dict[prog_str]['jacads'])
-                    json_out[prog_str]['fwers'].extend(
-                        res_dict[prog_str]['fwers'])
+                    json_out[prog_str]['jacads'].extend(prog_dict['jacads'])
+                    json_out[prog_str]['fwers'].extend(prog_dict['fwers'])
                     # print(json_out[prog_str]['jacads'])
-                    # json_out[prog_str]['rejects'].append(res_dict[prog_str]['rej_vars'])
-                    # json_out[prog_str]['accepts'].append(res_dict[prog_str]['acc_vars'])
+                    # json_out[prog_str]['rejects'].append(prog_dict['rej_vars'])
+                    # json_out[prog_str]['accepts'].append(prog_dict['acc_vars'])
                     # jacads.extend(lganm_dict['json_out']['jacads'])
                     # fwers.extend(lganm_dict['json_out']['fwers'])
                     # json_out[prog_str][pkl_file.stem] = lganm_dict[prog_str]['json_out']
-                    if not np.all(np.asarray(res_dict[prog_str]['jacads']) == 1.):
+                    if not np.all(np.asarray(prog_dict['jacads']) == 1.):
                         json_out[prog_str]['errors'].append(pkl_file.stem)
                     # print('\nprogram: {}'.format(prog_str))
                     # print('Jaccard Similarity (JS): {}.'.format(

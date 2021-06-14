@@ -659,7 +659,7 @@ class Interpreter:
             warm_scores = list(zip(*warm_scores))
             warm_utils = MetricUtils.coxsum(cox_index,
                                             warm_grads,
-                                            file_nm='portec_warm_up')
+                                            file_nm='portec_warm_up_{}'.format(program))
             warm_utils.vis_plot(warm_scores,
                                 pathlib.Path(cox_dir),
                                 self.data_dict['metric_scores'])
@@ -667,7 +667,9 @@ class Interpreter:
 
             val_grads = np.asarray(val_grads)
             val_scores = list(zip(*val_scores))
-            val_utils = MetricUtils.coxsum(cox_index, val_grads)
+            val_utils = MetricUtils.coxsum(cox_index, 
+                                           val_grads,
+                                           file_nm='portec_{}'.format(program))
             val_utils.vis_plot(val_scores,
                                pathlib.Path(cox_dir),
                                self.data_dict['metric_scores'])
