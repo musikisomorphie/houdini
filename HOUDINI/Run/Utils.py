@@ -448,41 +448,41 @@ def heat_plot(json_file, var_list, exp_nm, func_nm, out_folder):
         df_haz = pd.DataFrame(pear_haz, columns=var_list, index=var_list)
         df_tot = pd.DataFrame(pear_tot, columns=var_list, index=var_list)
 
-        font = FontProperties()
-        font.set_family('Helvetica')
-        # font.set_name('Helvetica')
-
+        sns.set(font_scale=2)
         fig, ax = plt.subplots(1, 2, sharey=True)
-        s_0 = sns.heatmap(df_cau, annot=True, cbar=False, mask=mask, center=0, cmap="RdBu_r",
+        s_0 = sns.heatmap(df_cau, annot=True, annot_kws={"size": 32}, cbar=False, mask=mask, center=0, cmap="RdBu_r", fmt=".2f",
                           ax=ax[0], vmin=-1, vmax=1)
-        s_0.set_xticklabels(s_0.get_xticklabels(), rotation=45,
-                            fontsize=14, fontweight='bold', fontproperties=font)
+        s_0.set_xticklabels(labels=[])
         s_0.set_yticklabels(s_0.get_yticklabels(),
-                            fontsize=14, fontweight='bold', fontproperties=font)
-        ax[0].set_title('Causal Probability', pad=20, fontsize=24,
-                        fontweight='bold', fontproperties=font)
+                            fontsize=32)
 
-        s_1 = sns.heatmap(df_haz, annot=True, mask=mask, center=0, cmap="RdBu_r",
+        s_1 = sns.heatmap(df_haz, annot=True, annot_kws={"size": 32}, mask=mask, center=0, cmap="RdBu_r",  fmt=".2f",
                           ax=ax[1], vmin=-1, vmax=1)
-        s_1.set_xticklabels(s_1.get_xticklabels(), rotation=45,
-                            fontsize=14, fontweight='bold', fontproperties=font)
-        ax[1].set_title('Hazard Coefficient', pad=20, fontsize=24,
-                        fontweight='bold', fontproperties=font)
+        # s_1.figure.axes[-1].yaxis.label.set_size(40)
+        s_1.set_xticklabels(labels=[])
 
-        fig.set_size_inches(32, 18, forward=True)
+        if exp_nm == 'path':
+            ax[0].set_title('Causal Probability', pad=20,
+                            fontsize=32, fontweight='bold')
+            ax[1].set_title('Hazard Coefficient', pad=20,
+                            fontsize=32, fontweight='bold')
+
+        fig.set_size_inches(48, 16, forward=True)
+        plt.tight_layout()
+        plt.subplots_adjust(hspace=0.4)
         plt.savefig(str(out_folder / '{}_{}_split.svg'.format(exp_nm, func_nm)))
 
-        fig, ax = plt.subplots(1, 1)
-        s_0 = sns.heatmap(np.abs(df_tot), annot=True, cbar=True, center=0, cmap="RdBu_r",
-                          ax=ax, vmin=-1, vmax=1)
-        s_0.set_xticklabels(s_0.get_xticklabels(), rotation=45,
-                            fontsize=14, fontweight='bold', fontproperties=font)
-        s_0.set_yticklabels(s_0.get_yticklabels(),
-                            fontsize=14, fontweight='bold', fontproperties=font)
+        # fig, ax = plt.subplots(1, 1)
+        # s_0 = sns.heatmap(np.abs(df_tot), annot=True, cbar=True, center=0, cmap="RdBu_r",
+        #                   ax=ax, vmin=-1, vmax=1)
+        # s_0.set_xticklabels(s_0.get_xticklabels(), rotation=30,
+        #                     fontsize=24, fontweight='bold', fontproperties=font)
+        # s_0.set_yticklabels(s_0.get_yticklabels(),
+        #                     fontsize=24, fontweight='bold', fontproperties=font)
 
-        # plt.show()
-        fig.set_size_inches(32, 18, forward=True)
-        plt.savefig(str(out_folder / '{}_{}_mixed.svg'.format(exp_nm, func_nm)))
+        # # plt.show()
+        # fig.set_size_inches(32, 18, forward=True)
+        # plt.savefig(str(out_folder / '{}_{}_mixed.svg'.format(exp_nm, func_nm)))
 
 
 def main():
@@ -497,43 +497,43 @@ def main():
     #     '/home/histopath/Data/PORTEC/Results_Nature/abcd_0/aicp/n_1000.pickle')
     # aicp_tests = compute_aicp_results(aicp_path)
 
-    # funcs = ['pearson', 'spearman', 'kendall']
-    # exps = ('path', 'mole', 'immu_cd8')
-    # var_lists = (['Myometrial invasion', 'Grade', 'LVSI', 'Vital area', 'Patient ID'],
-    #              ['Myometrial invasion', 'Grade', 'LVSI', 'L1CAM', 'POLE',
-    #               'MMRd', 'p53mutant', 'Vital area', 'Patient ID'],
-    #              ['Myometrial invasion', 'Grade', 'LVSI', 'L1CAM', 'POLE',
-    #               'MMRd', 'p53mutant', 'CD8+', 'Vital area', 'Patient ID'])
-    # res_dir = pathlib.Path('/home/histopath/Data/PORTEC/Results/')
-    # out_dir = pathlib.Path(
-    #     '/home/histopath/Data/PORTEC/Results_Nature/heatmap')
-    # for e_id, exp in enumerate(exps):
-    #     for func_nm in funcs:
-    #         json_file = res_dir / exp / 'proposed_64' / 'portec_table.json'
-    #         heat_plot(json_file, var_lists[e_id], exp, func_nm, out_dir)
-
+    funcs = ['pearson']
     exps = ('path', 'mole', 'immu_cd8')
-    met_nms = ('c-id', 'brie', 'bino')
-    stg_nms = ['warm-up', 'complete']
-    res_dir = pathlib.Path('/home/histopath/Data/PORTEC/Results/')
+    var_lists = (['Myometrial invasion', 'Grade', 'LVSI', 'Tissue area', 'Patient ID'],
+                 ['Myometrial invasion', 'Grade', 'LVSI', 'L1CAM', 'POLE',
+                  'MMRd', 'p53mutant', 'Tissue area', 'Patient ID'],
+                 ['Myometrial invasion', 'Grade', 'LVSI', 'L1CAM', 'POLE',
+                  'MMRd', 'p53mutant', 'CD8+', 'Tissue area', 'Patient ID'])
+    res_dir = pathlib.Path('/home/histopath/Data/PORTEC/Results_Nature/')
+    out_dir = pathlib.Path(
+        '/home/histopath/Data/PORTEC/Results_Nature/heatmap')
     for e_id, exp in enumerate(exps):
-        json_file = res_dir / exp / 'proposed' / 'portec_table.json'
-        with open(str(json_file)) as json_data:
-            res_dict = list(json.load(json_data).values())[0]
-            metrics = [res_dict['warm_scores'], res_dict['val_scores']]
-            for ms_id, mets in enumerate(metrics):
-                print(exp, stg_nms[ms_id])
-                for m_id, met in enumerate(mets):
-                    mn, q1, median, q3, mx = np.percentile(
-                        np.asarray(met), [0, 25, 50, 75, 100])
-                    met_sort = np.sort(np.asarray(met))
-                    met_sort = met_sort[(
-                        met_sort >= q1 - 1.5 * (q3 - q1)) & (met_sort <= q3 + 1.5 * (q3 - q1))]
-                    mn = met_sort[0]
-                    mx = met_sort[-1]
-                    print('{:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}'.format(mn, q1 - mn,
-                                                                             median - q1, q3 - median, mx - q3, mx))
-                print('\n')
+        for func_nm in funcs:
+            json_file = res_dir / exp / 'proposed_64' / 'portec_table.json'
+            heat_plot(json_file, var_lists[e_id], exp, func_nm, out_dir)
+
+    # exps = ('path', 'mole', 'immu_cd8')
+    # met_nms = ('c-id', 'brie', 'bino')
+    # stg_nms = ['warm-up', 'complete']
+    # res_dir = pathlib.Path('/home/histopath/Data/PORTEC/Results/')
+    # for e_id, exp in enumerate(exps):
+    #     json_file = res_dir / exp / 'proposed' / 'portec_table.json'
+    #     with open(str(json_file)) as json_data:
+    #         res_dict = list(json.load(json_data).values())[0]
+    #         metrics = [res_dict['warm_scores'], res_dict['val_scores']]
+    #         for ms_id, mets in enumerate(metrics):
+    #             print(exp, stg_nms[ms_id])
+    #             for m_id, met in enumerate(mets):
+    #                 mn, q1, median, q3, mx = np.percentile(
+    #                     np.asarray(met), [0, 25, 50, 75, 100])
+    #                 met_sort = np.sort(np.asarray(met))
+    #                 met_sort = met_sort[(
+    #                     met_sort >= q1 - 1.5 * (q3 - q1)) & (met_sort <= q3 + 1.5 * (q3 - q1))]
+    #                 mn = met_sort[0]
+    #                 mx = met_sort[-1]
+    #                 print('{:.4f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}'.format(mn, q1 - mn,
+    #                                                                          median - q1, q3 - median, mx - q3, mx))
+    #             print('\n')
 
 
 if __name__ == '__main__':
